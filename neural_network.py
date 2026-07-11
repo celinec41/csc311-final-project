@@ -73,7 +73,17 @@ class AutoEncoder(nn.Module):
         # Implement the function as described in the docstring.             #
         # Use sigmoid activations for f and g.                              #
         #####################################################################
-        out = inputs
+        # Step 1: Encode the input into a k-dimensional hidden representation.
+        # self.g applies the linear transformation W^(1) v + b^(1),
+        # then we squash it with sigmoid to get the hidden layer output g(...).
+        hidden = torch.sigmoid(self.g(inputs))
+ 
+        # Step 2: Decode the hidden representation back into the original
+        # question space (reconstruction of the user's answer vector).
+        # self.h applies the linear transformation W^(2) * hidden + b^(2),
+        # then sigmoid squashes each output into a probability in [0, 1],
+        # representing the predicted probability of answering each question correctly.
+        out = torch.sigmoid(self.h(hidden))
         #####################################################################
         #                       END OF YOUR CODE                            #
         #####################################################################
