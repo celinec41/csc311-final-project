@@ -7,6 +7,39 @@
 \usepackage{graphicx}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.5em}
+
+% ---------- Packages ----------
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{parskip}
+
+% ---------- Basic Info ----------
+\title{CSC311 final project ML}
+\author{Meixuan Lou}
+\date{July 2026}
+
+% ---------- Question Box ----------
+\newtcolorbox{questionbox}{
+  colback=gray!8,
+  colframe=gray!60,
+  boxrule=0.5pt,
+  arc=2pt,
+  left=6pt,
+  right=6pt,
+  top=6pt,
+  bottom=6pt
+}
+
+% ---------- Solution Label ----------
+\newcommand{\solution}{\vspace{0.5em}\noindent\textbf{Solution.}\ }
+
 \begin{document}
 \begin{center}
     {\LARGE \textbf{CSC311 Summer 2026}} \\[0.5em]
@@ -71,7 +104,149 @@ All three curves follow the same sigmoid shape but are horizontally shifted acco
  
 % ============================================================
 \subsection*{3. Matrix Factorization / Neural Network}
- 
+\begin{questionbox}
+In this problem, you will implement neural networks to predict students' correctness on a
+diagnostic question. Specifically, you will design an autoencoder model. Given a user
+$\mathbf{v} \in \mathbb{R}^{N_{\text{questions}}}$ from a set of users $\mathcal{S}$, our
+objective is:
+\[
+\min_{\theta} \sum_{\mathbf{v} \in \mathcal{S}} \| \mathbf{v} - f(\mathbf{v}; \theta) \|_2^2,
+\]
+where $f$ is the reconstruction of the input $\mathbf{v}$. The network computes the following
+function:
+\[
+f(\mathbf{v}; \theta) = h\big(\mathbf{W}^{(2)} g(\mathbf{W}^{(1)} \mathbf{v} + \mathbf{b}^{(1)}) + \mathbf{b}^{(2)}\big) \in \mathbb{R}^{N_{\text{questions}}}
+\]
+for some activation functions $h$ and $g$. In this question, you will be using sigmoid
+activation functions for both. Here, $\mathbf{W}^{(1)} \in \mathbb{R}^{k \times N_{\text{questions}}}$
+and $\mathbf{W}^{(2)} \in \mathbb{R}^{N_{\text{questions}} \times k}$, where $k \in \mathbb{N}$
+is the latent dimension. We provide the starter code written in \texttt{PyTorch} at
+\texttt{neural\_network.py}.
+\end{questionbox}
+
+% --------------------------------------------------
+% Part (a)
+% --------------------------------------------------
+\subsubsection*{(a)}
+\begin{questionbox}
+Describe at least three differences between ALS and neural networks.
+\end{questionbox}
+\solution
+
+There are several key differences between ALS and neural networks:
+\begin{itemize}
+    \item \textbf{Model expressiveness.} ALS assumes the prediction is simply the dot product of two vectors, $C_{nm} \approx \mathbf{u}_n^\top \mathbf{z}_m$, which is a bilinear model and can only capture linear relationships. The neural network introduced the sigmoid non-linearity between the two weight layers, so it can model more complex, non-linear relationships between student ability and question difficulty.
+
+    \item \textbf{Parameter structure.} In matrix factorization trained via ALS, each student has its own latent vector $\mathbf{u}_n$ and each question has its own latent vector $\mathbf{z}_m$; these parameters are learned directly,
+    and their number grows linearly with the number of students and questions. In the neural network, all students share the same set of weights $\mathbf{W}^{(1)}$, $\mathbf{W}^{(2)}$  and biases $\mathbf{b}^{(1)}$, $\mathbf{b}^{(2)}$. A student's ``representation'' is not a freely learned parameter but is instead computed by passing that student's raw answer vector through the network. Consequently, the number of parameters depends only on the number of questions and the chosen latent dimension, and does not grow with the number of students.
+
+    \item \textbf{Optimization procedure.}
+    ALS alternates between fixing $\mathbf{Z}$ and updating $\mathbf{U}$, then fixing $\mathbf{U}$ and updating $\mathbf{Z}$, repeating this process even when implemented
+    with SGD. The neural network is trained end-to-end: all parameters ($\mathbf{W}^{(1)}$, $\mathbf{W}^{(2)}$, $\mathbf{b}^{(1)}$, $\mathbf{b}^{(2)}$) are updated jointly in a single backward pass, with no alternating step.
+
+    \item \textbf{Gradient computation.}
+    In ALS, we must manually derive the gradient of the loss with respect to $\mathbf{u}_n$ and $\mathbf{z}_m$ and hand-code the update rule. In the neural network, gradients are computed automatically via PyTorch's autograd. The only thing we need to define is the forward pass, and backpropagation is handled by the framework.
+\end{itemize}
+
+% --------------------------------------------------
+% Part (b)
+% --------------------------------------------------
+\subsubsection*{(b)}
+\begin{questionbox}
+Implement a class \texttt{AutoEncoder} that performs a forward pass of the autoencoder
+following the instructions in the docstring.
+\end{questionbox}
+\solution
+
+The forward function defines a single pass of the autoencoder: it takes a student's answer vector as input, compresses it, and then reconstructs it back to its original size.
+
+\textbf{Step 1 — Encoding.} self.g(inputs) applies a linear transformation that maps the 1774-dimensional input down to a k-dimensional vector. Wrapping it with torch.sigmoid squashes every value into the range [0, 1], producing the hidden representation hidden. This step compresses the student's full answer pattern into a smaller latent representation of size k.
+
+\textbf{Step 2 — Decoding.} self.h(hidden) applies a second linear transformation that maps the k-dimensional hidden vector back up to 1774 dimensions. Wrapping it with torch.sigmoid again squashes each output into [0, 1], giving the final output out which is interpreted as the model's predicted probability that the student answers the corresponding question correctly. 
+
+% --------------------------------------------------
+% Part (c)
+% --------------------------------------------------
+\subsubsection*{(c)}
+\begin{questionbox}
+Train the autoencoder using latent dimensions of $k \in \{10, 50, 100, 200, 500\}$. Also,
+tune optimization hyperparameters such as learning rate and number of iterations. Select
+$k^*$ that has the highest validation accuracy.
+\end{questionbox}
+\solution
+\begin{table}[H]
+\centering
+\caption{Validation accuracy for different $(k, \text{lr})$ combinations after 50 epochs.}
+\begin{tabular}{c|ccccc}
+\toprule
+$k$ \textbackslash\ lr & 0.001 & 0.003 & \textbf{0.01} & 0.03 & 0.1 \\
+\midrule
+15 & 0.6176 & 0.6397 & 0.6866 & 0.6780 & 0.6528 \\
+20 & 0.6294 & 0.6509 & 0.6844 & 0.6780 & 0.6445 \\
+25 & 0.6257 & 0.6613 & 0.6836 & 0.6784 & 0.6559 \\
+\textbf{30} & 0.6291 & 0.6574 & \textbf{0.6911} & 0.6716 & 0.6514 \\
+35 & 0.6235 & 0.6602 & 0.6905 & 0.6696 & 0.6465 \\
+40 & 0.6280 & 0.6606 & 0.6888 & 0.6688 & 0.6478 \\
+45 & 0.6291 & 0.6613 & 0.6849 & 0.6651 & 0.6370 \\
+50 & 0.6286 & 0.6593 & 0.6808 & 0.6641 & 0.6542 \\
+55 & 0.6324 & 0.6638 & 0.6881 & 0.6665 & 0.6520 \\
+60 & 0.6279 & 0.6650 & 0.6902 & 0.6650 & 0.6523 \\
+65 & 0.6284 & 0.6640 & 0.6873 & 0.6631 & 0.6583 \\
+70 & 0.6317 & 0.6677 & 0.6812 & 0.6654 & 0.6566 \\
+75 & 0.6294 & 0.6675 & 0.6863 & 0.6620 & 0.6581 \\
+80 & 0.6318 & 0.6686 & 0.6902 & 0.6609 & 0.6574 \\
+85 & 0.6342 & 0.6657 & 0.6836 & 0.6626 & 0.6564 \\
+90 & 0.6297 & 0.6716 & 0.6829 & 0.6629 & 0.6531 \\
+95 & 0.6334 & 0.6712 & 0.6798 & 0.6589 & 0.6513 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% --------------------------------------------------
+% Part (d)
+% --------------------------------------------------
+\subsubsection*{(d)}
+\begin{questionbox}
+With your chosen $k^*$, plot and report how the training and validation objectives change
+as a function of epoch. Also, report the final test accuracy.
+\end{questionbox}
+\solution
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{nn_objective_curve.png}
+    \caption{nerual network objectivecurve}
+\end{figure}
+
+Final test accuracy (k*=30, lr*=0.01): 0.6924
+
+
+% --------------------------------------------------
+% Part (e)
+% --------------------------------------------------
+\subsubsection*{(e)}
+\begin{questionbox}
+Modify a function \texttt{train} so that the objective adds the $L_2$ regularization. The
+objective is as follows:
+\[
+\min_{\theta} \sum_{\mathbf{v} \in \mathcal{S}} \| \mathbf{v} - f(\mathbf{v}; \theta) \|_2^2
++ \frac{\lambda}{2} \big( \| \mathbf{W}^{(1)} \|_F^2 + \| \mathbf{W}^{(2)} \|_F^2 \big)
+\]
+You may use a method \texttt{get\_weight\_norm} to obtain the regularization term. Using the
+$k$ and other hyperparameters selected from part (d), tune the regularization penalty
+$\lambda \in \{0.001, 0.01, 0.1, 1\}$. With your chosen $\lambda$, report the final
+validation and test accuracy. Does your model perform better with the regularization
+penalty?
+\end{questionbox}
+\solution
+
+Using $\lambda^* = 0.001$ (selected via validation accuracy, tested over
+$\lambda \in \{0.001, 0.01, 0.1, 1\}$ with $k^*=30$ and $lr^*=0.01$ fixed),
+the final model achieves:
+\begin{itemize}
+    \item Validation accuracy: $0.6904$
+    \item Test accuracy: $0.6802$
+\end{itemize}
+Compared to the unregularized model ($\lambda = 0$) with the same $k^*$ and $lr^*$, which achieved a test accuracy of $0.6813$, the regularized model performs essentially the same (a difference of about $0.001$). We therefore conclude that adding the L2 regularization penalty does not meaningfully improve generalization performance in this setting. This is likely because the autoencoder's hidden dimension $k^*=30$ is already small relative to the number of questions, which acts as an implicit regularizer by limiting the model's capacity to overfit; an explicit weight penalty on top of this therefore offers little additional benefit.
 % ============================================================
 \subsection*{4. Ensemble}
  
