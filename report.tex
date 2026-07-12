@@ -1,15 +1,10 @@
 \documentclass[11pt, letterpaper]{article}
-% Packages
 \usepackage[utf8]{inputenc}
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath, amssymb}
-\usepackage{tikz}
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{graphicx}
-% TikZ libraries
-\usetikzlibrary{positioning, arrows.meta}
-% Formatting
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.5em}
 \begin{document}
@@ -21,39 +16,26 @@
 \end{center}
 \vspace{1em}
 
+\section*{Part A}
+ 
 % ============================================================
-\section*{1. k-Nearest Neighbors}
-
-\subsection*{(a) Validation accuracy vs. $k$ (user-based)}
-% TODO: insert plot, report accuracy for k in {1,6,11,16,21,26}
-
-\subsection*{(b) Best $k^*$ and test accuracy}
-% TODO: state chosen k* and final test accuracy
-
-\subsection*{(c) Item-based collaborative filtering}
-% TODO: state underlying assumption for item-based kNN, repeat (a)-(b)
-
-\subsection*{(d) User- vs. item-based comparison}
-% TODO: compare test performance, state which is better
-
-\subsection*{(e) Limitations of kNN}
-% TODO: list at least two limitations
-
+\subsection*{1. k-Nearest Neighbors}
+ 
 % ============================================================
-\section*{2. Item Response Theory}
-
-\subsection*{(a) Derivation}
-
+\subsection*{2. Item Response Theory}
+ 
+\subsubsection*{(a) Derivation}
+ 
 Let $C \in \{0,1\}^{N \times M}$ denote the sparse matrix of $N$ students and $M$ questions, observed only on the index set $O$. The probability that student $i$ answers question $j$ correctly is
 \[
 p(c_{ij} = 1 \mid \theta_i, \beta_j) = \sigma(\theta_i - \beta_j) = \frac{\exp(\theta_i - \beta_j)}{1 + \exp(\theta_i - \beta_j)}.
 \]
-
+ 
 Assuming independence across observed entries, the log-likelihood is
 \[
 \log p(C \mid \theta, \beta) = \sum_{(i,j) \in O} \Big[ c_{ij}(\theta_i - \beta_j) - \log\big(1 + \exp(\theta_i - \beta_j)\big) \Big].
 \]
-
+ 
 Taking derivatives:
 \[
 \frac{\partial \log p(C\mid\theta,\beta)}{\partial \theta_i} = \sum_{j : (i,j) \in O} \Big[ c_{ij} - \sigma(\theta_i - \beta_j) \Big],
@@ -61,48 +43,32 @@ Taking derivatives:
 \[
 \frac{\partial \log p(C\mid\theta,\beta)}{\partial \beta_j} = -\sum_{i : (i,j) \in O} \Big[ c_{ij} - \sigma(\theta_i - \beta_j) \Big].
 \]
-
-\subsection*{(b) Training curve}
-% TODO: insert hyperparameters and plot of train/val log-likelihood vs. iteration
-
-\subsection*{(c) Final accuracy}
-% TODO: report validation and test accuracy
-
-\subsection*{(d) Probability curves}
-% TODO: plot p(c_ij = 1) vs theta for three chosen questions, comment on shape
-
+ 
+\subsubsection*{(b) Training curve}
+\textit{Report chosen hyperparameters. Insert plot of training and validation log-likelihood vs. iteration.}
+ 
+\subsubsection*{(c) Final accuracy}
+\textit{Report final validation and test accuracy.}
+ 
+\subsubsection*{(d) Probability curves}
+\textit{Select three questions $j_1, j_2, j_3$. Plot $p(c_{ij}=1)$ vs. $\theta$ for each on the same axes. Comment on the shape of the curves and what they represent.}
+ 
 % ============================================================
-\section*{3. Matrix Factorization / Neural Network}
-% Delete whichever option your group did not use
-
-\subsection*{(a) SVD reconstruction}
-% TODO: try 5+ values of k, report validation-selected k and test accuracy
-
-\subsection*{(b) Limitation of SVD}
-% TODO: discuss how missing entries are handled
-
-\subsection*{(c)--(e) ALS with SGD}
-% TODO: describe implementation, chosen hyperparameters (lr, iterations, k*),
-% loss curve plot, final validation and test accuracy
-
-% --- OR, if Neural Network option ---
-\subsection*{(a) ALS vs. neural network differences}
-% TODO: at least three differences
-
-\subsection*{(b) Autoencoder implementation}
-% TODO: describe forward pass
-
-\subsection*{(c)--(d) Training and results}
-% TODO: k sweep {10,50,100,200,500}, chosen k*, hyperparameters,
-% loss/accuracy curve, final test accuracy
-
-\subsection*{(e) L2 regularization}
-% TODO: sweep lambda in {0.001, 0.01, 0.1, 1}, report final val/test accuracy,
-% discuss whether regularization helped
-
+\subsection*{3. Matrix Factorization / Neural Network}
+ 
 % ============================================================
-\section*{4. Ensemble}
-% TODO: describe bagging process (3 base models, bootstrapped training sets),
-% report validation and test accuracy, discuss whether ensembling helped and why
-
+\subsection*{4. Ensemble}
+ 
+\clearpage
+\section*{Part B}
+ 
+\subsection*{1. Formal Description}
+ 
+\subsection*{2. Figure or Diagram}
+ 
+\subsection*{3. Comparison or Demonstration}
+ 
+\subsection*{4. Limitations}
+ 
 \end{document}
+ 
