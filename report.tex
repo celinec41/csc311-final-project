@@ -20,6 +20,112 @@
  
 % ============================================================
 \subsection*{1. k-Nearest Neighbors}
+
+\subsubsection*{(a) User-based collaborative filtering}
+
+In user-based collaborative filtering, each row represents a student and each column represents a question. KNN identifies students with similar response patterns and uses their answers to estimate missing entries.
+
+We evaluated
+\[
+k \in \{1,6,11,16,21,26\}.
+\]
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{cc}
+        \toprule
+        $k$ & Validation Accuracy \\
+        \midrule
+        1  & 0.6245 \\
+        6  & 0.6781 \\
+        11 & 0.6897 \\
+        16 & 0.6753 \\
+        21 & 0.6681 \\
+        26 & 0.6503 \\
+        \bottomrule
+    \end{tabular}
+    \caption{User-based KNN validation accuracy.}
+    \label{tab:user_knn}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{knn_validation_accuracy.png}
+    \caption{Validation accuracy as a function of $k$ for user-based and item-based KNN.}
+    \label{fig:knn_validation}
+\end{figure}
+
+The validation accuracy increased until $k=11$ and then decreased. A small $k$ can be sensitive to noisy neighbours, while a large $k$ may include less similar students.
+
+\subsubsection*{(b) Selected user-based model}
+
+The highest validation accuracy was $0.6897$ at
+\[
+k^*_{\text{user}}=11.
+\]
+Using this value, the test accuracy was
+\[
+\boxed{0.6847}.
+\]
+
+\subsubsection*{(c) Item-based collaborative filtering}
+
+For item-based collaborative filtering, the matrix was transposed so that each row represented a question. KNN then compared questions based on how similarly they were answered by students. The imputed matrix was transposed back before evaluation.
+
+The underlying assumption is that questions with similar response patterns are related, so a student's response to one question can help predict their response to another similar question.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{cc}
+        \toprule
+        $k$ & Validation Accuracy \\
+        \midrule
+        1  & 0.6071 \\
+        6  & 0.6544 \\
+        11 & 0.6832 \\
+        16 & 0.6863 \\
+        21 & 0.6916 \\
+        26 & 0.6902 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Item-based KNN validation accuracy.}
+    \label{tab:item_knn}
+\end{table}
+
+The highest validation accuracy was $0.6916$ at
+\[
+k^*_{\text{item}}=21.
+\]
+Using this value, the test accuracy was
+\[
+\boxed{0.6828}.
+\]
+
+\subsubsection*{(d) Comparison}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{lccc}
+        \toprule
+        Method & Selected $k$ & Validation Accuracy & Test Accuracy \\
+        \midrule
+        User-based KNN & 11 & 0.6897 & 0.6847 \\
+        Item-based KNN & 21 & 0.6916 & 0.6828 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Comparison of user-based and item-based KNN.}
+    \label{tab:knn_comparison}
+\end{table}
+
+User-based KNN achieved a slightly higher test accuracy than item-based KNN, although the performances were very similar.
+
+\subsubsection*{(e) Limitations}
+
+One limitation is that the response matrix contains many missing entries. Therefore, the distance between two students or questions may be calculated from only a small amount of shared information and may not reflect true similarity.
+
+A second limitation is that new students or questions have very little response data, making it difficult to identify reliable neighbours.
+
+KNN also does not directly model student ability or question difficulty, and its computational cost increases as the number of students and questions grows.
  
 % ============================================================
 \subsection*{2. Item Response Theory}
