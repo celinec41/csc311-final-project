@@ -114,8 +114,6 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     :param num_epoch: int
     :return: None
     """
-    # TODO: Add a regularizer to the cost function.
-
     # Tell PyTorch you are training the model.
     model.train()
 
@@ -140,7 +138,8 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
             target[nan_mask] = output[nan_mask]
 
             loss = torch.sum((output - target) ** 2.0)
-            loss.backward()
+            reg_loss = loss + (lamb / 2.0) * model.get_weight_norm()
+            reg_loss.backward()
 
             train_loss += loss.item()
             optimizer.step()
@@ -186,24 +185,12 @@ def evaluate(model, train_data, valid_data):
         total += 1
     return correct / float(total)
 
-
-
-def main():
-    zero_train_matrix, train_matrix, valid_data, test_data = load_data()
-    num_question = train_matrix.shape[1]
-    #####################################################################
-    # TODO:                                                             #
-    # Try out 5 different k and select the best k using the             #
-    # validation set.                                                   #
-    #####################################################################
-    '''
-    # Set model hyperparameters.
+def search_k_lr(num_question, train_matrix, zero_train_matrix, valid_data):
+    """Part (c): grid search over k and lr, return best (lr, k)."""
     lr_list = [0.001, 0.003, 0.01, 0.03, 0.1]
     num_epoch = 50
-
     best_valid_acc = -1.0
     best_lr, best_k = None, None
-
     for lr in lr_list:
         for k in range(15, 100, 5):
             model = AutoEncoder(num_question, k)
@@ -213,25 +200,36 @@ def main():
             if valid_acc > best_valid_acc:
                 best_valid_acc = valid_acc
                 best_lr, best_k = lr, k
-
     print(f"Best (lr*, k*) = ({best_lr}, {best_k}), valid_acc={best_valid_acc:.4f}")
- 
-    '''   
-    # Set model hyperparameters.
-    best_k = 30
+    return best_lr, best_k
+
+
+def search_lambda(num_question, best_k, best_lr, num_epoch, train_matrix, zero_train_matrix, valid_data):
+    """Part (e): grid search over lambda, using k* and lr* from part (c)."""
+    lamb_list = [0.0, 0.001, 0.01, 0.1, 1.0]  # 0.0 作为不加正则化的基线
+    best_valid_acc = -1.0
+    best_lamb = None
+    for lamb in lamb_list:
+        model = AutoEncoder(num_question, best_k)
+        train(model, best_lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
+        valid_acc = evaluate(model, zero_train_matrix, valid_data)
+        print(f"lamb={lamb}: valid_acc={valid_acc:.4f}")
+        if valid_acc > best_valid_acc:
+            best_valid_acc = valid_acc
+            best_lamb = lamb
+    print(f"Best lambda* = {best_lamb}, valid_acc={best_valid_acc:.4f}")
+    return best_lamb
+
+
+def train_and_plot(num_question, best_k, best_lr, best_lamb, num_epoch,
+                          train_matrix, zero_train_matrix, valid_data, test_data):
+    """Parts (d)/(e): train final model with chosen hyperparameters, plot curves."""
     final_model = AutoEncoder(num_question, best_k)
-
-    # Set optimization hyperparameters.
-    best_lr = 0.01
-    num_epoch = 50
-    lamb = None
-
     train_obj_hist, valid_obj_hist = train(
-        final_model, best_lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch
+        final_model, best_lr, best_lamb, train_matrix, zero_train_matrix, valid_data, num_epoch
     )
-
     test_acc = evaluate(final_model, zero_train_matrix, test_data)
-    print(f"Final test accuracy (k*={best_k}, lr*={best_lr}): {test_acc:.4f}")
+    print(f"Final test accuracy (k*={best_k}, lr*={best_lr}, lambda*={best_lamb}): {test_acc:.4f}")
 
     epochs = list(range(1, num_epoch + 1))
     plt.figure()
@@ -241,6 +239,38 @@ def main():
     plt.ylabel("Squared-error objective")
     plt.legend()
     plt.savefig("nn_objective_curve.png")
+
+def main():
+    zero_train_matrix, train_matrix, valid_data, test_data = load_data()
+    num_question = train_matrix.shape[1]
+    
+    # Part (c):
+    # best_lr, best_k = search_k_lr(num_question, train_matrix, zero_train_matrix, valid_data)
+    best_k, best_lr, num_epoch = 30, 0.01, 50
+    best_lamb = None
+
+    # Part (d):
+    # train_and_plot(num_question, best_k, best_lr, best_lamb, num_epoch,
+    #                       train_matrix, zero_train_matrix, valid_data, test_data)
+    #
+    # Part (e):
+    # best_lamb = search_lambda(num_question, best_k, best_lr, num_epoch,
+    #                            train_matrix, zero_train_matrix, valid_data)
+    best_lamb = 0.001
+
+    # Part (e):
+    final_model = AutoEncoder(num_question, best_k)
+    train(
+        final_model, best_lr, best_lamb, train_matrix, zero_train_matrix, valid_data, num_epoch
+    )
+
+    final_valid_acc = evaluate(final_model, zero_train_matrix, valid_data)
+    final_test_acc = evaluate(final_model, zero_train_matrix, test_data)
+
+    print(f"Final valid acc (k*={best_k}, lr*={best_lr}, lambda*={best_lamb}): {final_valid_acc:.4f}")
+    print(f"Final test acc  (k*={best_k}, lr*={best_lr}, lambda*={best_lamb}): {final_test_acc:.4f}")
+
+    
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
