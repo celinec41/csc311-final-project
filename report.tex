@@ -45,13 +45,29 @@ Taking derivatives:
 \]
  
 \subsubsection*{(b) Training curve}
-\textit{Report chosen hyperparameters. Insert plot of training and validation log-likelihood vs. iteration.}
- 
+The model was trained using alternating gradient descent with a learning rate of $\eta = 0.01$ for $150$ iterations. Figure~\ref{fig:irt_training} shows the training and validation negative log-likelihood as a function of iteration. Both curves decrease sharply within the first $\sim$40 iterations and then plateau, indicating convergence without overfitting (the validation NLLK does not increase).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{irt_training_curve.png}
+    \caption{Training and validation negative log-likelihood vs. iteration ($\eta=0.01$, 150 iterations).}
+    \label{fig:irt_training}
+\end{figure}
+
 \subsubsection*{(c) Final accuracy}
-\textit{Report final validation and test accuracy.}
- 
+With the trained model, the final validation accuracy was $\mathbf{70.6\%}$ and the final test accuracy was $\mathbf{70.8\%}$.
+
 \subsubsection*{(d) Probability curves}
-\textit{Select three questions $j_1, j_2, j_3$. Plot $p(c_{ij}=1)$ vs. $\theta$ for each on the same axes. Comment on the shape of the curves and what they represent.}
+Figure~\ref{fig:irt_prob} shows the probability of a correct response, $p(c_{ij}=1)$, as a function of student ability $\theta$, for three questions of varying difficulty.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{irt_probability_curves.png}
+    \caption{Probability of correct response vs. $\theta$ for three questions of varying difficulty.}
+    \label{fig:irt_prob}
+\end{figure}
+
+All three curves follow the same sigmoid shape but are horizontally shifted according to each question's difficulty parameter $\beta_j$. The curve for Question 1165 is shifted furthest left, indicating the lowest difficulty: even students with below-average ability have a high probability of answering correctly. Conversely, Question 1410 is shifted right, requiring a much higher ability level before the probability of a correct response becomes non-negligible. Question 82 lies in between. The consistent sigmoid shape across all three reflects the core assumption of the one-parameter IRT model: correctness probability depends only on the gap $\theta_i - \beta_j$, so difficulty acts purely as a horizontal shift of the same underlying logistic curve.
  
 % ============================================================
 \subsection*{3. Matrix Factorization / Neural Network}
