@@ -151,7 +151,10 @@ def main():
     # Tune learning rate and number of iterations. With the implemented #
     # code, report the validation and test accuracy.                    #
     #####################################################################
-    lr = 0.01
+    # Hyperparameters selected via grid search over
+    # lr in {0.001, 0.005, 0.01, 0.05} x iterations in {50, 100, 150, 200},
+    # choosing the combination with the highest validation accuracy.
+    lr = 0.001
     iterations = 150
 
     theta, beta, val_acc_lst, train_nllk_lst, val_nllk_lst = irt(
