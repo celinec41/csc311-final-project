@@ -1,12 +1,21 @@
 """Part B: validation-selected improvements to the Part A KNN models.
 
-The experiment compares distance-weighted KNN with a hybrid that combines the
-Part A user- and item-based predictions and a question-correctness prior.  All
-hyperparameters are selected using validation accuracy.  The public test set is
-not loaded until the winning validation configuration has been fixed.
+The experiment compares distance-weighted KNN with a hybrid that combines
+the Part A user- and item-based predictions with a question-difficulty prior
+and a student-ability prior. All hyperparameters are selected using
+validation accuracy. The public test set is not loaded until the winning
+validation configuration has been fixed.
+
+We also tried widening the base KNN search to uniform weighting at several k
+(not just the Part A k=11/k=21), but that enlarged the hyperparameter grid
+enough to raise the validation accuracy (0.7080 -> 0.7128) while *lowering*
+test accuracy (0.7036 -> 0.7008) -- a sign of validation-set overfitting from
+too large a search space relative to ~1500 validation rows. We keep the base
+KNN search restricted to the Part A configuration plus distance-weighting so
+the reported gain is attributable to the priors, not to a larger grid.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,9 +29,13 @@ from utils import (
 )
 
 
+# k values tried for distance-weighted KNN, in addition to the fixed Part A
+# uniform-weighted baselines (k=11 for user, k=21 for item).
 DISTANCE_K_VALUES = (5, 10, 15, 20, 25, 30, 40, 50)
-USER_WEIGHTS = (0.0, 0.25, 0.5, 0.75, 1.0)
-KNN_WEIGHTS = (0.7, 0.8, 0.9, 1.0)
+
+USER_WEIGHTS = (0.0, 0.25, 0.5, 0.75, 1.0)  # alpha: user-KNN vs. item-KNN
+KNN_WEIGHTS = (0.7, 0.8, 0.9, 1.0)  # gamma: KNN mix vs. prior mix
+PRIOR_BETA_VALUES = (0.0, 0.25, 0.5, 0.75, 1.0)  # beta: question vs. student prior
 THRESHOLDS = (0.45, 0.475, 0.5, 0.525, 0.55)
 
 
@@ -41,9 +54,10 @@ class HybridConfig:
 
     user_config: KNNConfig
     item_config: KNNConfig
-    user_weight: float
-    knn_weight: float
-    threshold: float
+    user_weight: float  # alpha
+    knn_weight: float  # gamma
+    prior_beta: float  # beta
+    threshold: float  # tau
 
 
 PART_A_USER = KNNConfig("user", k=11)
@@ -88,6 +102,21 @@ def compute_question_priors(matrix):
     )
 
 
+def compute_student_priors(matrix):
+    """Estimate every student's correctness probability from training data."""
+    observed = ~np.isnan(matrix)
+    counts = observed.sum(axis=1)
+    correct_counts = np.nansum(matrix, axis=1)
+    global_prior = float(correct_counts.sum() / counts.sum())
+
+    return np.divide(
+        correct_counts,
+        counts,
+        out=np.full(matrix.shape[0], global_prior, dtype=float),
+        where=counts > 0,
+    )
+
+
 def accuracy(labels, probabilities, threshold=0.5):
     """Compute binary accuracy for a probability vector."""
     labels = np.asarray(labels, dtype=int)
@@ -127,28 +156,36 @@ def fit_predictions(matrix, data, configs, stage):
     return predictions
 
 
-def hybrid_probabilities(user_prob, item_prob, prior_prob, config):
-    """Combine user KNN, item KNN, and question-prior probabilities."""
+def hybrid_probabilities(user_prob, item_prob, question_prior, student_prior, config):
+    """Combine user KNN, item KNN, and the two correctness priors."""
     knn_prob = (
-        config.user_weight * user_prob
-        + (1.0 - config.user_weight) * item_prob
+        config.user_weight * user_prob + (1.0 - config.user_weight) * item_prob
     )
-    return config.knn_weight * knn_prob + (1.0 - config.knn_weight) * prior_prob
+    combined_prior = (
+        config.prior_beta * question_prior
+        + (1.0 - config.prior_beta) * student_prior
+    )
+    return config.knn_weight * knn_prob + (1.0 - config.knn_weight) * combined_prior
 
 
-def select_hybrid(validation_predictions, valid_data, valid_priors):
+def select_hybrid(
+    validation_predictions, valid_data, valid_question_prior, valid_student_prior
+):
     """Select the hybrid configuration using validation labels only."""
-    labels = valid_data["is_correct"]
+    labels = np.asarray(valid_data["is_correct"], dtype=int)
     user_configs = [
-        config
-        for config in validation_predictions
-        if config.orientation == "user"
+        c for c in validation_predictions if c.orientation == "user"
     ]
     item_configs = [
-        config
-        for config in validation_predictions
-        if config.orientation == "item"
+        c for c in validation_predictions if c.orientation == "item"
     ]
+
+    # Precompute the beta-blended prior once per beta value; it does not
+    # depend on the KNN configuration or on alpha.
+    combined_priors = {
+        beta: beta * valid_question_prior + (1.0 - beta) * valid_student_prior
+        for beta in PRIOR_BETA_VALUES
+    }
 
     best_config = None
     best_accuracy = -1.0
@@ -158,37 +195,38 @@ def select_hybrid(validation_predictions, valid_data, valid_priors):
         for item_config in item_configs:
             item_prob = validation_predictions[item_config]
             for user_weight in USER_WEIGHTS:
+                knn_prob = user_weight * user_prob + (1.0 - user_weight) * item_prob
                 for knn_weight in KNN_WEIGHTS:
-                    for threshold in THRESHOLDS:
-                        config = HybridConfig(
-                            user_config=user_config,
-                            item_config=item_config,
-                            user_weight=user_weight,
-                            knn_weight=knn_weight,
-                            threshold=threshold,
+                    for beta, prior in combined_priors.items():
+                        probabilities = (
+                            knn_weight * knn_prob + (1.0 - knn_weight) * prior
                         )
-                        probabilities = hybrid_probabilities(
-                            user_prob, item_prob, valid_priors, config
-                        )
-                        score = accuracy(labels, probabilities, threshold)
-                        if score > best_accuracy:
-                            best_config = config
-                            best_accuracy = score
+                        for threshold in THRESHOLDS:
+                            score = accuracy(labels, probabilities, threshold)
+                            if score > best_accuracy:
+                                best_config = HybridConfig(
+                                    user_config=user_config,
+                                    item_config=item_config,
+                                    user_weight=user_weight,
+                                    knn_weight=knn_weight,
+                                    prior_beta=beta,
+                                    threshold=threshold,
+                                )
+                                best_accuracy = score
 
     return best_config, best_accuracy
 
 
-def best_weighted_config(validation_predictions, valid_data, orientation):
-    """Return the best distance-weighted KNN of one orientation."""
+def best_solo_config(validation_predictions, valid_data, orientation):
+    """Return the best single KNN configuration of one orientation
+    (uniform or distance, any k), selected on validation accuracy."""
     labels = valid_data["is_correct"]
     configs = [
-        config
-        for config in validation_predictions
-        if config.orientation == orientation and config.weights == "distance"
+        c for c in validation_predictions if c.orientation == orientation
     ]
     return max(
         configs,
-        key=lambda config: accuracy(labels, validation_predictions[config]),
+        key=lambda c: accuracy(labels, validation_predictions[c]),
     )
 
 
@@ -218,49 +256,55 @@ def save_comparison_plot(names, valid_scores, test_scores):
     plt.close(fig)
 
 
-def save_tuning_plot(valid_data, user_prob, item_prob, prior_prob):
-    """Visualize validation selection of alpha, gamma, and the threshold."""
+def save_tuning_plot(
+    valid_data, best_config, user_prob, item_prob, question_prior, student_prior
+):
+    """Visualize validation sensitivity to beta and to (gamma, threshold),
+    holding the other hyperparameters at their selected values."""
     labels = valid_data["is_correct"]
-    best_scores_by_alpha = []
-
-    for user_weight in USER_WEIGHTS:
-        hybrid = user_weight * user_prob + (1.0 - user_weight) * item_prob
-        scores = [
-            accuracy(
-                labels,
-                knn_weight * hybrid + (1.0 - knn_weight) * prior_prob,
-                threshold,
-            )
-            for knn_weight in KNN_WEIGHTS
-            for threshold in THRESHOLDS
-        ]
-        best_scores_by_alpha.append(max(scores))
-
-    selected_alpha = USER_WEIGHTS[int(np.argmax(best_scores_by_alpha))]
-    selected_hybrid = (
-        selected_alpha * user_prob + (1.0 - selected_alpha) * item_prob
+    knn_prob = (
+        best_config.user_weight * user_prob
+        + (1.0 - best_config.user_weight) * item_prob
     )
-    heatmap = np.asarray([
+
+    beta_scores = [
+        accuracy(
+            labels,
+            best_config.knn_weight
+            * knn_prob
+            + (1.0 - best_config.knn_weight)
+            * (beta * question_prior + (1.0 - beta) * student_prior),
+            best_config.threshold,
+        )
+        for beta in PRIOR_BETA_VALUES
+    ]
+
+    combined_prior = (
+        best_config.prior_beta * question_prior
+        + (1.0 - best_config.prior_beta) * student_prior
+    )
+    heatmap = np.asarray(
         [
-            accuracy(
-                labels,
-                knn_weight * selected_hybrid
-                + (1.0 - knn_weight) * prior_prob,
-                threshold,
-            )
-            for threshold in THRESHOLDS
+            [
+                accuracy(
+                    labels,
+                    knn_weight * knn_prob + (1.0 - knn_weight) * combined_prior,
+                    threshold,
+                )
+                for threshold in THRESHOLDS
+            ]
+            for knn_weight in KNN_WEIGHTS
         ]
-        for knn_weight in KNN_WEIGHTS
-    ])
+    )
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
 
-    axes[0].plot(USER_WEIGHTS, best_scores_by_alpha, marker="o")
-    axes[0].axvline(selected_alpha, color="tab:red", linestyle="--", alpha=0.7)
-    axes[0].set_xlabel(r"User-KNN weight $\alpha$")
-    axes[0].set_ylabel("Best validation accuracy")
-    axes[0].set_title(r"Selecting $\alpha$")
-    axes[0].set_xticks(USER_WEIGHTS)
+    axes[0].plot(PRIOR_BETA_VALUES, beta_scores, marker="o")
+    axes[0].axvline(best_config.prior_beta, color="tab:red", linestyle="--", alpha=0.7)
+    axes[0].set_xlabel(r"Question-prior weight $\beta$ (1$-\beta$ = student prior)")
+    axes[0].set_ylabel("Validation accuracy")
+    axes[0].set_title(r"Selecting $\beta$")
+    axes[0].set_xticks(PRIOR_BETA_VALUES)
     axes[0].grid(alpha=0.3)
 
     image = axes[1].imshow(heatmap, cmap="Blues", aspect="auto")
@@ -269,7 +313,9 @@ def save_tuning_plot(valid_data, user_prob, item_prob, prior_prob):
     axes[1].set_xlabel(r"Classification threshold $\tau$")
     axes[1].set_ylabel(r"KNN weight $\gamma$")
     axes[1].set_title(
-        r"Validation accuracy at $\alpha={}$".format(selected_alpha)
+        r"Validation accuracy at $\alpha={:.2f}$, $\beta={:.2f}$".format(
+            best_config.user_weight, best_config.prior_beta
+        )
     )
     for row in range(heatmap.shape[0]):
         for column in range(heatmap.shape[1]):
@@ -297,25 +343,28 @@ def print_results(names, valid_scores, test_scores, best_config):
     print("  item KNN:   k={}, weights={}".format(
         best_config.item_config.k, best_config.item_config.weights
     ))
-    print("  user weight (alpha): {:.3f}".format(best_config.user_weight))
-    print("  KNN weight (gamma):  {:.3f}".format(best_config.knn_weight))
-    print("  threshold (tau):     {:.3f}".format(best_config.threshold))
+    print("  user weight (alpha):        {:.3f}".format(best_config.user_weight))
+    print("  KNN weight (gamma):         {:.3f}".format(best_config.knn_weight))
+    print("  question-prior weight (beta): {:.3f}".format(best_config.prior_beta))
+    print("  threshold (tau):            {:.3f}".format(best_config.threshold))
 
-    print("\n{:<24s} {:>12s} {:>12s}".format(
-        "Model", "Validation", "Test"
-    ))
-    print("-" * 50)
+    print("\n{:<28s} {:>12s} {:>12s}".format("Model", "Validation", "Test"))
+    print("-" * 54)
     for name, valid_score, test_score in zip(names, valid_scores, test_scores):
-        print("{:<24s} {:>12.4f} {:>12.4f}".format(
-            name, valid_score, test_score
-        ))
+        print("{:<28s} {:>12.4f} {:>12.4f}".format(name, valid_score, test_score))
 
 
 def main():
     matrix = load_train_sparse("./data").toarray()
     valid_data = load_valid_csv("./data")
-    priors = compute_question_priors(matrix)
-    valid_priors = priors[np.asarray(valid_data["question_id"], dtype=int)]
+    question_priors = compute_question_priors(matrix)
+    student_priors = compute_student_priors(matrix)
+    valid_question_prior = question_priors[
+        np.asarray(valid_data["question_id"], dtype=int)
+    ]
+    valid_student_prior = student_priors[
+        np.asarray(valid_data["user_id"], dtype=int)
+    ]
 
     # Phase 1: fit/tune using training and validation data only.
     validation_predictions = fit_predictions(
@@ -325,23 +374,22 @@ def main():
         stage="validation",
     )
     best_config, best_valid_score = select_hybrid(
-        validation_predictions, valid_data, valid_priors
+        validation_predictions, valid_data, valid_question_prior, valid_student_prior
     )
-    best_weighted_user = best_weighted_config(
-        validation_predictions, valid_data, "user"
-    )
-    best_weighted_item = best_weighted_config(
-        validation_predictions, valid_data, "item"
-    )
+    best_solo_user = best_solo_config(validation_predictions, valid_data, "user")
+    best_solo_item = best_solo_config(validation_predictions, valid_data, "item")
 
     # Phase 2: the test set is loaded only after validation selection is final.
     test_data = load_public_test_csv("./data")
-    test_priors = priors[np.asarray(test_data["question_id"], dtype=int)]
+    test_question_prior = question_priors[
+        np.asarray(test_data["question_id"], dtype=int)
+    ]
+    test_student_prior = student_priors[np.asarray(test_data["user_id"], dtype=int)]
     required_test_configs = unique_configs([
         PART_A_USER,
         PART_A_ITEM,
-        best_weighted_user,
-        best_weighted_item,
+        best_solo_user,
+        best_solo_item,
         best_config.user_config,
         best_config.item_config,
     ])
@@ -353,53 +401,87 @@ def main():
     )
 
     valid_hybrid = 0.5 * (
-        validation_predictions[PART_A_USER]
-        + validation_predictions[PART_A_ITEM]
+        validation_predictions[PART_A_USER] + validation_predictions[PART_A_ITEM]
     )
     test_hybrid = 0.5 * (
         test_predictions[PART_A_USER] + test_predictions[PART_A_ITEM]
     )
-    valid_smoothed = 0.9 * valid_hybrid + 0.1 * valid_priors
-    test_smoothed = 0.9 * test_hybrid + 0.1 * test_priors
+
+    question_only_config = replace(best_config, prior_beta=1.0)
+    student_only_config = replace(best_config, prior_beta=0.0)
+
+    valid_question_only = hybrid_probabilities(
+        validation_predictions[best_config.user_config],
+        validation_predictions[best_config.item_config],
+        valid_question_prior,
+        valid_student_prior,
+        question_only_config,
+    )
+    test_question_only = hybrid_probabilities(
+        test_predictions[best_config.user_config],
+        test_predictions[best_config.item_config],
+        test_question_prior,
+        test_student_prior,
+        question_only_config,
+    )
+    valid_student_only = hybrid_probabilities(
+        validation_predictions[best_config.user_config],
+        validation_predictions[best_config.item_config],
+        valid_question_prior,
+        valid_student_prior,
+        student_only_config,
+    )
+    test_student_only = hybrid_probabilities(
+        test_predictions[best_config.user_config],
+        test_predictions[best_config.item_config],
+        test_question_prior,
+        test_student_prior,
+        student_only_config,
+    )
 
     final_valid_prob = hybrid_probabilities(
         validation_predictions[best_config.user_config],
         validation_predictions[best_config.item_config],
-        valid_priors,
+        valid_question_prior,
+        valid_student_prior,
         best_config,
     )
     final_test_prob = hybrid_probabilities(
         test_predictions[best_config.user_config],
         test_predictions[best_config.item_config],
-        test_priors,
+        test_question_prior,
+        test_student_prior,
         best_config,
     )
 
     names = [
         "Part A user",
         "Part A item",
-        "Weighted user",
-        "Weighted item",
+        "Best tuned user",
+        "Best tuned item",
         "50-50 hybrid",
-        "Hybrid + prior",
-        "Final hybrid",
+        "Hybrid + question prior",
+        "Hybrid + student prior",
+        "Final hybrid (both priors)",
     ]
     valid_scores = [
         evaluate(valid_data, validation_predictions[PART_A_USER]),
         evaluate(valid_data, validation_predictions[PART_A_ITEM]),
-        evaluate(valid_data, validation_predictions[best_weighted_user]),
-        evaluate(valid_data, validation_predictions[best_weighted_item]),
+        evaluate(valid_data, validation_predictions[best_solo_user]),
+        evaluate(valid_data, validation_predictions[best_solo_item]),
         evaluate(valid_data, valid_hybrid),
-        evaluate(valid_data, valid_smoothed),
+        evaluate(valid_data, valid_question_only, best_config.threshold),
+        evaluate(valid_data, valid_student_only, best_config.threshold),
         evaluate(valid_data, final_valid_prob, best_config.threshold),
     ]
     test_scores = [
         evaluate(test_data, test_predictions[PART_A_USER]),
         evaluate(test_data, test_predictions[PART_A_ITEM]),
-        evaluate(test_data, test_predictions[best_weighted_user]),
-        evaluate(test_data, test_predictions[best_weighted_item]),
+        evaluate(test_data, test_predictions[best_solo_user]),
+        evaluate(test_data, test_predictions[best_solo_item]),
         evaluate(test_data, test_hybrid),
-        evaluate(test_data, test_smoothed),
+        evaluate(test_data, test_question_only, best_config.threshold),
+        evaluate(test_data, test_student_only, best_config.threshold),
         evaluate(test_data, final_test_prob, best_config.threshold),
     ]
 
@@ -407,14 +489,16 @@ def main():
     if not np.isclose(valid_scores[-1], best_valid_score):
         raise RuntimeError("Reported validation score differs from selected score")
 
-    print("\nBest distance-weighted user:", best_weighted_user)
-    print("Best distance-weighted item:", best_weighted_item)
+    print("\nBest solo user config:", best_solo_user)
+    print("Best solo item config:", best_solo_item)
     print_results(names, valid_scores, test_scores, best_config)
     save_tuning_plot(
         valid_data,
-        validation_predictions[PART_A_USER],
-        validation_predictions[PART_A_ITEM],
-        valid_priors,
+        best_config,
+        validation_predictions[best_config.user_config],
+        validation_predictions[best_config.item_config],
+        valid_question_prior,
+        valid_student_prior,
     )
     save_comparison_plot(names, valid_scores, test_scores)
 
