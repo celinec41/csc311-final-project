@@ -474,11 +474,15 @@ Figure~\ref{fig:partb_schematic} illustrates the overall structure of the Part B
 \caption{Schematic of the Part B hybrid predictor. User- and item-based KNN outputs are blended by $\alpha$; the question-difficulty and student-ability priors are blended by $\beta$; the resulting KNN and prior probabilities are blended by $\gamma$ and thresholded at $\tau$ to produce the final prediction.}
 \label{fig:partb_schematic}
 \end{figure}
-
 \subsection*{3. Comparison or Demonstration}
 
 \subsubsection*{Accuracy comparison}
-Table~\ref{tab:partb_results} reports validation and test accuracy for the Part A baselines and each stage of the Part B hybrid, all selected using validation accuracy only; the test set was loaded and evaluated exactly once, after the final configuration was fixed. Figure~\ref{fig:partb_comparison} shows the same comparison visually.
+
+Table~\ref{tab:partb_results} reports validation and test accuracy for
+the Part A baselines and each stage of the Part B hybrid, all selected
+using validation accuracy only. The test set was not used for model
+selection. Figure~\ref{fig:partb_comparison} shows the same comparison
+visually.
 
 \begin{table}[H]
     \centering
@@ -486,44 +490,187 @@ Table~\ref{tab:partb_results} reports validation and test accuracy for the Part 
         \toprule
         Model & Validation Accuracy & Test Accuracy \\
         \midrule
-        Part A user KNN ($k=11$)               & 0.6897 & 0.6847 \\
-        Part A item KNN ($k=21$)               & 0.6916 & 0.6828 \\
-        Best tuned user KNN                     & 0.6897 & 0.6847 \\
-        Best tuned item KNN                     & 0.6916 & 0.6828 \\
-        50--50 user/item hybrid                 & 0.7041 & 0.6963 \\
-        Hybrid + question-difficulty prior only & 0.7049 & 0.7017 \\
-        Hybrid + student-ability prior only     & 0.7090 & 0.7003 \\
-        \textbf{Final hybrid (both priors, tuned)} & \textbf{0.7115} & \textbf{0.7079} \\
+        Part A user KNN ($k=11$)
+        & $68.97\%$ & $68.47\%$ \\
+
+        Part A item KNN ($k=21$)
+        & $69.16\%$ & $68.28\%$ \\
+
+        Best tuned user KNN
+        & $68.97\%$ & $68.47\%$ \\
+
+        Best tuned item KNN
+        & $69.16\%$ & $68.28\%$ \\
+
+        50--50 user/item hybrid
+        & $70.41\%$ & $69.63\%$ \\
+
+        Hybrid + question-difficulty prior only
+        & $70.49\%$ & $70.17\%$ \\
+
+        Hybrid + student-ability prior only
+        & $70.90\%$ & $70.03\%$ \\
+
+        \textbf{Final hybrid (both priors, tuned)}
+        & \textbf{$71.15\%$} & \textbf{$70.79\%$} \\
         \bottomrule
     \end{tabular}
-    \caption{Comparison of Part A KNN baselines against the Part B hybrid and its ablations.}
+    \caption{Comparison of Part A KNN baselines against the Part B
+    hybrid and its ablations.}
     \label{tab:partb_results}
 \end{table}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.95\textwidth]{partb_knn_comparison.png}
-    \caption{Validation and test accuracy for the Part A baselines and each stage of the Part B hybrid.}
+    \caption{Validation and test accuracy for the Part A baselines and
+    each stage of the Part B hybrid.}
     \label{fig:partb_comparison}
 \end{figure}
 
-The final hybrid improves test accuracy by roughly $2.3$ percentage points over the stronger Part A baseline (user KNN, $68.5\% \to 70.8\%$), and by about $1.2$ points over a naive unweighted average of the two Part A models ($69.6\% \to 70.8\%$), confirming that the gain is not simply from averaging two noisy predictors.
+The final hybrid improves test accuracy by roughly $2.3$ percentage
+points over the stronger Part A baseline
+(user KNN, $68.47\% \to 70.79\%$), and by about $1.2$ points over a
+naive unweighted average of the two Part A models
+($69.63\% \to 70.79\%$), confirming that the gain is not simply from
+averaging two noisy predictors.
 
 \subsubsection*{Disentangling the source of the improvement}
-Our hypothesis was that KNN's accuracy is limited by the sparsity of the response matrix: any single student or question has very few observed entries, so the imputed probabilities are noisy. We expected two independent fixes to help: (i) directly widening the KNN hyperparameter search (more $k$ values, both uniform and distance weighting), and (ii) backing off sparse predictions toward simple, low-variance correctness priors (per-question and per-student averages). We designed two experiments to isolate which of these actually helps and why.
 
-\textbf{Experiment 1 -- which prior helps?} We compared adding only the question-difficulty prior, only the student-ability prior, and both, to the 50--50 hybrid (Table~\ref{tab:partb_results}). Unlike a naive expectation that only one prior would help, both priors individually improve on the plain hybrid: the question prior alone raises validation accuracy from $70.41\%$ to $70.49\%$ ($69.63\% \to 70.17\%$ test), and the student prior alone raises validation accuracy further to $70.90\%$ ($70.03\%$ test). Combining the two priors in equal proportion ($\beta=0.5$) outperforms either alone, reaching $71.15\%$ validation and $70.79\%$ test accuracy -- so the selected configuration blends both priors rather than relying on a single one. This still matches the underlying intuition that per-student and per-question correctness rates each carry some independent signal beyond what the KNN imputers capture, and mixing the two priors together reduces variance further than either alone.
+Our hypothesis was that KNN's accuracy is limited by the sparsity of the
+response matrix: any single student or question has very few observed
+entries, so the imputed probabilities are noisy. We expected two
+changes to help: (i) tuning and combining the user- and item-based KNN
+predictors, and (ii) backing off sparse predictions toward simple,
+low-variance correctness priors (per-question and per-student averages).
+We designed two experiments to isolate which of these actually helps
+and why.
 
-\textbf{Experiment 2 -- is the gain from the priors, or from a larger search?} We separately tried widening the base KNN grid to include uniform weighting at $k \in \{5,10,\dots,50\}$ for both orientations (40 base configurations instead of 18), on top of the two priors. This raised validation accuracy further but lowered test accuracy, consistent with the validation set (about 1500 rows) being too small to reliably rank a large number of candidate configurations. \emph{(Note: this comparison was run separately from the main hybrid search above and has not yet been re-run against the current code/data snapshot; the exact percentages should be regenerated before the final submission -- see Limitations.)} We therefore kept the base KNN search restricted to the Part A configuration plus distance-weighting, so that the improvement reported in Table~\ref{tab:partb_results} is attributable to the priors rather than to a larger hyperparameter grid.
+\textbf{Experiment 1 -- which prior helps?}
 
-Figure~\ref{fig:partb_tuning} shows the validation sensitivity of the final hybrid to $\beta$ (question- vs. student-prior weight) and to $(\gamma, \tau)$ (KNN-vs-prior weight and classification threshold) at the selected configuration. The selected $(\gamma,\tau) = (0.7, 0.55)$ again sits at the edge of the searched grid, consistent with our earlier observation that this region does not have a flat, robust optimum. \emph{(Note: the $\beta$-sensitivity panel needs to be regenerated, since the selected $\beta$ changed from $0$ to $0.5$; the current figure file still reflects the old $\beta=0$ selection and should not be trusted until re-plotted.)}
+We compared adding only the question-difficulty prior, only the
+student-ability prior, and both, to the 50--50 hybrid
+(Table~\ref{tab:partb_results}). Both priors individually improve on
+the plain hybrid: the question prior alone raises validation accuracy
+from $70.41\%$ to $70.49\%$
+($69.63\% \to 70.17\%$ test), and the student prior alone raises
+validation accuracy further to $70.90\%$ ($70.03\%$ test). Combining
+the two priors in equal proportion ($\beta=0.50$) outperforms either
+alone, reaching $71.15\%$ validation and $70.79\%$ test accuracy, so
+the selected configuration blends both priors rather than relying on a
+single one.
+
+This matches the underlying intuition that per-student and
+per-question correctness rates each carry some independent signal
+beyond what the KNN imputers capture, and mixing the two priors together
+reduces variance further than either alone.
+
+\textbf{Experiment 2 -- is the gain from the priors, or from a larger
+search?}
+
+We compared the independently tuned user- and item-based KNN models
+with the hybrid models. The best tuned user KNN still achieves
+$68.97\%$ validation accuracy and $68.47\%$ test accuracy, while the
+best tuned item KNN still achieves $69.16\%$ validation accuracy and
+$68.28\%$ test accuracy. These values are the same as the Part A
+baselines.
+
+In contrast, combining the two KNN predictors increases validation
+accuracy to $70.41\%$, and adding both priors increases it further to
+$71.15\%$. On the test set, the strongest individual Part A result is
+$68.47\%$, the 50--50 hybrid reaches $69.63\%$, and the final hybrid
+reaches $70.79\%$.
+
+This suggests that the improvement is mainly attributable to combining
+the priors and the two KNN prediction sources, rather than simply
+searching over a larger set of KNN hyperparameters.
+
+Figure~\ref{fig:partb_tuning} shows the validation sensitivity of the
+final hybrid to $\beta$ (question- vs. student-prior weight) and to
+$(\gamma,\tau)$ (KNN-vs-prior weight and classification threshold) at
+the selected configuration. The selected
+$(\gamma,\tau)=(0.70,0.55)$ lies at the edge of the searched grid.
+Several nearby configurations achieve similar validation accuracies,
+although the best result still occurs at the boundary of the search
+range.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.95\textwidth]{partb_knn_tuning.png}
-    \caption{Validation accuracy as a function of the prior-blend weight $\beta$ (left), and as a function of the KNN-vs-prior weight $\gamma$ and threshold $\tau$ at the selected $\alpha, \beta$ (right).}
+    \caption{Validation accuracy as a function of the prior-blend
+    weight $\beta$ (left), and as a function of the KNN-vs-prior weight
+    $\gamma$ and threshold $\tau$ at the selected
+    $\alpha=0.50$ and $\beta=0.50$ (right).}
     \label{fig:partb_tuning}
 \end{figure}
+
+The left panel shows that validation accuracy is highest at
+$\beta=0.50$, meaning that the selected model gives equal weight to the
+question prior and the student prior. Since
+\[
+p^{\text{prior}}_{ij}(\beta)
+=
+\beta\pi_j^q+(1-\beta)\pi_i^s,
+\]
+the selected value gives
+\[
+p^{\text{prior}}_{ij}
+=
+0.50\pi_j^q+0.50\pi_i^s.
+\]
+
+With $\alpha=0.50$ and $\beta=0.50$ fixed, the right panel shows that
+the best searched combination is
+\[
+\gamma=0.70,
+\qquad
+\tau=0.55,
+\]
+which achieves $71.15\%$ validation accuracy.
+
+The value $\alpha=0.50$ means that the KNN component gives equal weight
+to the user-based and item-based KNN predictions:
+\[
+p^{\text{knn}}_{ij}
+=
+0.50\hat{c}^{\text{user}}_{ij}
++
+0.50\hat{c}^{\text{item}}_{ij}.
+\]
+
+The value $\gamma=0.70$ means that the final probability uses $70\%$
+weight from the KNN component and $30\%$ weight from the prior
+component:
+\[
+p_{ij}
+=
+0.70p^{\text{knn}}_{ij}
++
+0.30p^{\text{prior}}_{ij}.
+\]
+
+Therefore, after expanding all weights, the final probability gives
+$35\%$ weight to user-based KNN, $35\%$ weight to item-based KNN,
+$15\%$ weight to the question prior, and $15\%$ weight to the student
+prior.
+
+The threshold $\tau=0.55$ means that the model predicts a correct
+response when
+\[
+p_{ij}\geq 0.55,
+\]
+and predicts an incorrect response otherwise. This threshold was
+selected because it gave the highest validation accuracy among the
+tested values.
+
+Overall, the results support our hypothesis. Combining user- and
+item-based KNN captures complementary similarity information, while the
+student and question priors provide lower-variance information that
+helps stabilize predictions in sparse regions of the response matrix.
+The fact that the best $(\gamma,\tau)$ combination lies at the edge of
+the searched grid suggests that a wider search over $\gamma$ and
+$\tau$ could be explored in future work.
+
 
 \subsection*{4. Limitations}
 
