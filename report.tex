@@ -674,14 +674,58 @@ $\tau$ could be explored in future work.
 
 \subsection*{4. Limitations}
 
-\textbf{Sparsity is only partially addressed.} The priors help because both students and questions have more observed entries on average than a single KNN neighbourhood does, but each prior is still just a single scalar per student or per question; for students or questions with very few responses, the prior itself falls back to the global average and provides little personalization. The approach would perform poorly for a genuinely cold-start student or question with zero training observations, since both the KNN imputers and the priors are undefined (or degenerate to the global mean) in that regime.
+\textbf{Sparsity is only partially addressed.}
+The priors help because both students and questions have more observed
+entries on average than a single KNN neighbourhood does. However, each
+prior is still only a single scalar for each student or question. For
+students or questions with very few responses, the prior may be
+unreliable and may fall back to the global average, which provides
+little personalization. The approach would also perform poorly for a
+true cold-start student or question with zero training observations,
+since both the KNN predictors and the priors would contain very little
+useful information.
 
-\textbf{Heuristic rather than principled combination.} Unlike IRT, which derives $p(c_{ij}=1)$ from an explicit probabilistic model with interpretable parameters, our hybrid combines KNN outputs and priors through hand-tuned linear weights ($\alpha,\gamma,\beta$) and a threshold ($\tau$) selected by brute-force grid search. The method offers no principled explanation of \emph{how much} weight each prior should get in general -- that answer is entirely dataset-dependent and would need to be re-tuned from scratch on a different dataset or a different student/question ratio.
+\textbf{Heuristic rather than principled combination.}
+Unlike IRT, which derives $p(c_{ij}=1)$ from an explicit probabilistic
+model with interpretable student-ability and question-difficulty
+parameters, our hybrid combines KNN outputs and priors using
+validation-selected linear weights $(\alpha,\beta,\gamma)$ and a
+classification threshold $\tau$. The method does not provide a
+principled rule for how much weight each component should receive in
+general. The selected weights are dataset-dependent and would likely
+need to be re-tuned for a different response matrix or a different
+student-to-question ratio.
 
-\textbf{Sensitivity to hyperparameter search size and to the computing environment.} As Experiment 2 showed, a larger hyperparameter grid can increase validation accuracy while decreasing test accuracy, purely from the validation set (about 1500 rows) being too small to reliably rank a large number of candidate configurations. We also observed, while re-running our own code, that the selected $(\alpha,\beta,\gamma,\tau)$ combination is not perfectly stable across re-runs on different machines: two identical copies of the code produced slightly different selected hyperparameters (e.g. a different $\alpha$ or $\beta$), which we traced to small floating-point differences in the underlying nearest-neighbour distance computation across library/hardware versions changing which of several near-tied grid points is selected as the arg-max. This means our reported test accuracy is itself only a point estimate; a different validation split, or even a different machine, could plausibly select a different configuration with a couple of points' difference in test accuracy. A more robust extension would use cross-validation, a larger held-out set, or an explicit tie-breaking / stability check for the final hyperparameter selection instead of a single validation split.
+\textbf{Sensitivity to hyperparameter selection and to the computing
+environment.}
+The validation set is relatively small, so it may not reliably
+distinguish between several configurations with very similar
+accuracies. We also observed, while re-running our own code, that the
+selected $(\alpha,\beta,\gamma,\tau)$ combination is not perfectly
+stable across re-runs on different machines. Small floating-point
+differences in the nearest-neighbour distance computation across
+library or hardware versions may change which of several near-tied
+grid points is selected as the arg-max. This means that the reported
+test accuracy is only a point estimate, and a different validation
+split or computing environment could select a slightly different
+configuration. A more robust extension would use cross-validation, a
+larger held-out set, or an explicit tie-breaking and stability check
+for the final hyperparameter selection.
 
-\textbf{Unused structure.} We did not use \texttt{question\_meta.csv} or \texttt{student\_meta.csv}. A natural extension is a hierarchical prior, e.g., backing a sparse question's difficulty estimate off to its subject's average correctness rather than the global average, which could recover additional signal beyond the flat priors used here.
+\textbf{Unused structure.}
+We did not use \texttt{question\_meta.csv} or
+\texttt{student\_meta.csv}. A natural extension would be to use a
+hierarchical prior. For example, if a question has very few observed
+responses, its difficulty estimate could be backed off to the average
+correctness rate of questions from the same subject rather than directly
+to the global average. Student metadata could also be incorporated to
+improve predictions for students with limited response histories.
 
-\textbf{Under-explored search range.} Our selected $(\gamma,\tau)$ sits at the edge of the range we searched, with validation accuracy still increasing toward that edge rather than peaking inside the grid. Our reported test accuracy is therefore likely a slight underestimate of what this hybrid approach can achieve; we chose not to widen the grid further in order to keep the comparison in Experiment 2 controlled, but a follow-up search over a wider $(\gamma,\tau)$ range (and possibly finer steps) is a low-effort way to likely improve on our numbers.
-
+\textbf{Under-explored search range.}
+The selected $(\gamma,\tau)$ lies at the edge of the searched range,
+with validation accuracy still increasing toward that boundary rather
+than reaching a clear interior maximum. This suggests that the current
+search range may not contain the true best configuration. A follow-up
+search over a wider range of $\gamma$ and $\tau$, possibly using finer
+steps, could determine whether further improvement is possible.
 \end{document}
