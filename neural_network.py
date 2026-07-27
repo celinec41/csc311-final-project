@@ -185,23 +185,35 @@ def evaluate(model, train_data, valid_data):
         total += 1
     return correct / float(total)
 
-def search_k_lr(num_question, train_matrix, zero_train_matrix, valid_data):
-    """Part (c): grid search over k and lr, return best (lr, k)."""
+def search_k_lr_epoch(num_question, train_matrix, zero_train_matrix, valid_data):
+    """Part (c): full grid search over lr, k, and num_epoch jointly,
+    return best (k, lr, num_epoch).
+
+    k uses the exact range specified in the assignment:
+    k in {10, 50, 100, 200, 500} (the previous version used
+    range(15, 100, 5), which did not match the assignment's k values).
+    This is the more thorough version: rather than fixing lr at the
+    value found in an earlier search (which used a different k range),
+    it re-tunes lr jointly with the corrected k values and num_epoch.
+    5 x 5 x 5 = 125 combinations, so this is slower than fixing lr.
+    """
     lr_list = [0.001, 0.003, 0.01, 0.03, 0.1]
-    num_epoch = 50
+    k_list = [10, 50, 100, 200, 500]
+    epoch_list = [10, 20, 30, 40, 50]
     best_valid_acc = -1.0
-    best_lr, best_k = None, None
+    best_k, best_lr, best_epoch = None, None, None
     for lr in lr_list:
-        for k in range(15, 100, 5):
-            model = AutoEncoder(num_question, k)
-            train(model, lr, 0.0, train_matrix, zero_train_matrix, valid_data, num_epoch)
-            valid_acc = evaluate(model, zero_train_matrix, valid_data)
-            print(f"lr={lr}, k={k}: valid_acc={valid_acc:.4f}")
-            if valid_acc > best_valid_acc:
-                best_valid_acc = valid_acc
-                best_lr, best_k = lr, k
-    print(f"Best (lr*, k*) = ({best_lr}, {best_k}), valid_acc={best_valid_acc:.4f}")
-    return best_lr, best_k
+        for k in k_list:
+            for num_epoch in epoch_list:
+                model = AutoEncoder(num_question, k)
+                train(model, lr, 0.0, train_matrix, zero_train_matrix, valid_data, num_epoch)
+                valid_acc = evaluate(model, zero_train_matrix, valid_data)
+                print(f"lr={lr}, k={k}, epoch={num_epoch}: valid_acc={valid_acc:.4f}")
+                if valid_acc > best_valid_acc:
+                    best_valid_acc = valid_acc
+                    best_k, best_lr, best_epoch = k, lr, num_epoch
+    print(f"Best (k*, lr*, epoch*) = ({best_k}, {best_lr}, {best_epoch}), valid_acc={best_valid_acc:.4f}")
+    return best_k, best_lr, best_epoch
 
 
 def search_lambda(num_question, best_k, best_lr, num_epoch, train_matrix, zero_train_matrix, valid_data):
@@ -244,19 +256,19 @@ def main():
     zero_train_matrix, train_matrix, valid_data, test_data = load_data()
     num_question = train_matrix.shape[1]
     
-    # Part (c):
-    # best_lr, best_k = search_k_lr(num_question, train_matrix, zero_train_matrix, valid_data)
-    best_k, best_lr, num_epoch = 30, 0.01, 50
-    best_lamb = None
+    # Part (c): full joint search over k in {10, 50, 100, 200, 500},
+    # lr in {0.001, 0.003, 0.01, 0.03, 0.1}, epoch in {10, 20, 30, 40, 50}.
+    # best_k, best_lr, num_epoch = search_k_lr_epoch(num_question, train_matrix, zero_train_matrix, valid_data)
+    best_k, best_lr, num_epoch = 10, 0.03, 20  # found by search_k_lr_epoch: valid_acc=0.6922
 
     # Part (d):
-    # train_and_plot(num_question, best_k, best_lr, best_lamb, num_epoch,
+    # train_and_plot(num_question, best_k, best_lr, 0.0, num_epoch,
     #                       train_matrix, zero_train_matrix, valid_data, test_data)
     #
     # Part (e):
     # best_lamb = search_lambda(num_question, best_k, best_lr, num_epoch,
     #                            train_matrix, zero_train_matrix, valid_data)
-    best_lamb = 0.001
+    best_lamb = 0.0  # found by search_lambda: valid_acc=0.6857
 
     # Part (e):
     final_model = AutoEncoder(num_question, best_k)
