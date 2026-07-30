@@ -262,8 +262,8 @@ def main():
     best_k, best_lr, num_epoch = 10, 0.03, 20  # found by search_k_lr_epoch: valid_acc=0.6922
 
     # Part (d):
-    # train_and_plot(num_question, best_k, best_lr, 0.0, num_epoch,
-    #                       train_matrix, zero_train_matrix, valid_data, test_data)
+    train_and_plot(num_question, best_k, best_lr, 0.0, num_epoch,
+                          train_matrix, zero_train_matrix, valid_data, test_data)
     #
     # Part (e):
     # best_lamb = search_lambda(num_question, best_k, best_lr, num_epoch,
