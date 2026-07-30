@@ -2,8 +2,8 @@
 
 Predicting whether a student answers a diagnostic question correctly, using
 the [Eedi](https://eedi.com/) dataset. This repository implements and
-compares several collaborative-filtering / latent-variable models (Part A),
-combines them into a bagged ensemble, and proposes and evaluates a novel
+compares several collaborative-filtering / latent-variable models,
+combines them into a bagged ensemble(Part A), and proposes and evaluates a novel
 extension (Part B).
 
 **Team:** Xiaohan Ma, Meixuan Lou, Siyi Chen
