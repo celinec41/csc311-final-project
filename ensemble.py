@@ -1,19 +1,3 @@
-"""Question 4: Bagging ensemble of 3 base models -- kNN (knn.py),
-IRT (item_response.py), and the Autoencoder (neural_network.py).
-
-How the ensemble works:
-  1. Bootstrap the training set 3 times (sample len(train_data) rows WITH
-     replacement, once per base model).
-  2. Train one base model on each bootstrap sample: kNN (user-based
-     KNNImputer), IRT (theta/beta via gradient ascent), and the
-     Autoencoder (PyTorch).
-  3. For every (user_id, question_id) in valid_data / test_data, get a
-     predicted probability of "correct" from each of the 3 trained
-     models, and AVERAGE the 3 probabilities.
-  4. Threshold the averaged probability at 0.5 to get the final
-     prediction, and report validation/test accuracy.
-"""
-
 import numpy as np
 import torch
 from sklearn.impute import KNNImputer
