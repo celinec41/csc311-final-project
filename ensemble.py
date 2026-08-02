@@ -12,7 +12,7 @@ from item_response import irt, sigmoid as irt_sigmoid
 from neural_network import AutoEncoder, train as nn_train
 
 BEST_KNN_K = 11
-BEST_IRT_LR = 0.01
+BEST_IRT_LR = 0.001
 BEST_IRT_ITERATIONS = 150
 NN_K = 10
 NN_LR = 0.03
@@ -74,9 +74,12 @@ def knn_predict_probs(boot_matrix, data, k):
     return np.clip(probs, 0.0, 1.0)
 
 
-def irt_predict_probs(boot_dict, valid_data_for_training_curve, data, lr, iterations):
-    """Train IRT (theta, beta) on the bootstrap dict, return predicted
-    probabilities for every (user_id, question_id) pair in `data`.
+def irt_train_once(boot_dict, valid_data_for_training_curve, lr, iterations):
+    """Train IRT (theta, beta) on the bootstrap dict ONCE, returning the
+    fitted parameters so the same trained model can be evaluated on both
+    the validation and test sets (IRT's gradient descent is deterministic,
+    so retraining used to give identical results, but training once is
+    both cheaper and the methodologically correct pattern).
 
     :param valid_data_for_training_curve: irt() expects a validation set
         to print/track progress during training; this does NOT leak into
@@ -84,18 +87,25 @@ def irt_predict_probs(boot_dict, valid_data_for_training_curve, data, lr, iterat
         item_response.py's own main() uses it (progress logging).
     """
     theta, beta, _, _, _ = irt(boot_dict, valid_data_for_training_curve, lr, iterations)
-    probs = np.array([
+    return theta, beta
+
+
+def irt_predict_probs(theta, beta, data):
+    """Return IRT-predicted probabilities for every (user_id, question_id)
+    pair in `data`, using an already-trained (theta, beta)."""
+    return np.array([
         irt_sigmoid(theta[u] - beta[q])
         for u, q in zip(data["user_id"], data["question_id"])
     ])
-    return probs
 
 
-def nn_predict_probs(boot_matrix, num_question, valid_data_for_training_curve, data,
-                      k, lr, lamb, num_epoch):
+def nn_train_once(boot_matrix, num_question, valid_data_for_training_curve, k, lr, lamb, num_epoch):
     """Train the AutoEncoder (from neural_network.py, unmodified) on the
-    bootstrap matrix, return predicted probabilities for every
-    (user_id, question_id) pair in `data`.
+    bootstrap matrix ONCE, returning the trained model and the zero-filled
+    input tensor needed for prediction. Training only once (rather than
+    once per evaluation set) matters here because AutoEncoder's weights
+    are randomly initialized and no seed is set for torch, so calling
+    AutoEncoder(...) again would train an entirely different model.
     """
     zero_matrix = np.nan_to_num(boot_matrix, nan=0.0)
     train_tensor = torch.FloatTensor(boot_matrix)
@@ -103,8 +113,13 @@ def nn_predict_probs(boot_matrix, num_question, valid_data_for_training_curve, d
 
     model = AutoEncoder(num_question, k)
     nn_train(model, lr, lamb, train_tensor, zero_tensor, valid_data_for_training_curve, num_epoch)
-
     model.eval()
+    return model, zero_tensor
+
+
+def nn_predict_probs(model, zero_tensor, data):
+    """Return NN-predicted probabilities for every (user_id, question_id)
+    pair in `data`, using an already-trained `model`."""
     probs = np.zeros(len(data["user_id"]))
     for i, u in enumerate(data["user_id"]):
         inputs = zero_tensor[u].unsqueeze(0)
@@ -132,7 +147,8 @@ def main():
     sparse_matrix = load_train_sparse(base_path).toarray()
     num_student, num_question = sparse_matrix.shape
 
-    rng = np.random.default_rng(seed=311)  # fixed seed so results are reproducible
+    rng = np.random.default_rng(seed=311)  # fixed seed so bootstrap resampling is reproducible
+    torch.manual_seed(311)  # fixed seed so the AutoEncoder's weight init is reproducible too
 
     # ---- Base model 1: kNN, trained on bootstrap sample #1 ----
     boot_mat_knn = bootstrap_matrix(train_data, sparse_matrix.shape, rng)
@@ -143,23 +159,23 @@ def main():
         f"test_acc={accuracy_from_probs(knn_test_probs, test_data['is_correct']):.4f}"
     )
 
-    # ---- Base model 2: IRT, trained on bootstrap sample #2 ----
+    # ---- Base model 2: IRT, trained ONCE on bootstrap sample #2 ----
     boot_dict_irt = bootstrap_dict(train_data, rng)
-    irt_valid_probs = irt_predict_probs(boot_dict_irt, valid_data, valid_data, BEST_IRT_LR, BEST_IRT_ITERATIONS)
-    irt_test_probs = irt_predict_probs(boot_dict_irt, valid_data, test_data, BEST_IRT_LR, BEST_IRT_ITERATIONS)
+    theta, beta = irt_train_once(boot_dict_irt, valid_data, BEST_IRT_LR, BEST_IRT_ITERATIONS)
+    irt_valid_probs = irt_predict_probs(theta, beta, valid_data)
+    irt_test_probs = irt_predict_probs(theta, beta, test_data)
     print(
         f"[IRT alone]  valid_acc={accuracy_from_probs(irt_valid_probs, valid_data['is_correct']):.4f}  "
         f"test_acc={accuracy_from_probs(irt_test_probs, test_data['is_correct']):.4f}"
     )
 
-    # ---- Base model 3: Autoencoder (NN), trained on bootstrap sample #3 ----
+    # ---- Base model 3: Autoencoder (NN), trained ONCE on bootstrap sample #3 ----
     boot_mat_nn = bootstrap_matrix(train_data, sparse_matrix.shape, rng)
-    nn_valid_probs = nn_predict_probs(
-        boot_mat_nn, num_question, valid_data, valid_data, NN_K, NN_LR, NN_LAMB, NN_NUM_EPOCH
+    nn_model, nn_zero_tensor = nn_train_once(
+        boot_mat_nn, num_question, valid_data, NN_K, NN_LR, NN_LAMB, NN_NUM_EPOCH
     )
-    nn_test_probs = nn_predict_probs(
-        boot_mat_nn, num_question, valid_data, test_data, NN_K, NN_LR, NN_LAMB, NN_NUM_EPOCH
-    )
+    nn_valid_probs = nn_predict_probs(nn_model, nn_zero_tensor, valid_data)
+    nn_test_probs = nn_predict_probs(nn_model, nn_zero_tensor, test_data)
     print(
         f"[NN alone]   valid_acc={accuracy_from_probs(nn_valid_probs, valid_data['is_correct']):.4f}  "
         f"test_acc={accuracy_from_probs(nn_test_probs, test_data['is_correct']):.4f}"
