@@ -226,7 +226,7 @@ Very small learning rates ($\eta=0.001$) with enough iterations gave the best va
 \end{figure}
 
 \subsubsection*{(c) Final accuracy}
-With the selected hyperparameters, the final validation accuracy was $\mathbf{70.79\%}$ (matching the boxed entry in Table~\ref{tab:irt_tune}) and the final test accuracy was $\mathbf{70.28\%}$. The test accuracy is slightly lower than the $\eta=0.01$ setting we had used previously ($70.63\%$ validation, $70.79\%$ test), even though the new hyperparameters were chosen for higher validation accuracy. This is expected: the validation and test sets are different samples, so a small ($<1\%$) hyperparameter-driven improvement on one does not guarantee an identical improvement on the other.
+With the selected hyperparameters, the final validation accuracy was $\mathbf{70.79\%}$ (matching the bolded entry in Table~\ref{tab:irt_tune}) and the final test accuracy was $\mathbf{70.28\%}$. The test accuracy is slightly lower than the $\eta=0.01$ setting we had used previously ($70.63\%$ validation, $70.79\%$ test), even though the new hyperparameters were chosen for higher validation accuracy. This is expected: the validation and test sets are different samples, so a small ($<1\%$) hyperparameter-driven improvement on one does not guarantee an identical improvement on the other.
 
 \subsubsection*{(d) Probability curves}
 Figure~\ref{fig:irt_prob} shows the probability of a correct response, $p(c_{ij}=1)$, as a function of student ability $\theta$, for three questions of varying difficulty.
@@ -238,7 +238,7 @@ Figure~\ref{fig:irt_prob} shows the probability of a correct response, $p(c_{ij}
     \label{fig:irt_prob}
 \end{figure}
 
-All three curves follow the same sigmoid shape but are horizontally shifted according to each question's difficulty parameter $\beta_j$. The curve for Question 1165 is shifted furthest left, indicating the lowest difficulty: even students with below-average ability have a high probability of answering correctly. Conversely, Question 1410 is shifted right, requiring a much higher ability level before the probability of a correct response becomes non-negligible. Question 82 lies in between. The consistent sigmoid shape across all three reflects the core assumption of the one-parameter IRT model: correctness probability depends only on the gap $\theta_i - \beta_j$, so difficulty acts purely as a horizontal shift of the same underlying logistic curve.
+All three curves follow the same sigmoid shape but are horizontally shifted according to each question's difficulty parameter $\beta_j$. The curve for Question 1444 is shifted furthest left, indicating the lowest difficulty: even students with below-average ability have a high probability of answering correctly. Conversely, Question 1410 is shifted right, requiring a much higher ability level before the probability of a correct response becomes non-negligible. Question 915 lies in between. The consistent sigmoid shape across all three reflects the core assumption of the one-parameter IRT model: correctness probability depends only on the gap $\theta_i - \beta_j$, so difficulty acts purely as a horizontal shift of the same underlying logistic curve.
  
 % ============================================================
 \subsection*{3. Matrix Factorization / Neural Network}
