@@ -1,20 +1,3 @@
-"""Part B: validation-selected improvements to the Part A KNN models.
-
-The experiment compares distance-weighted KNN with a hybrid that combines
-the Part A user- and item-based predictions with a question-difficulty prior
-and a student-ability prior. All hyperparameters are selected using
-validation accuracy. The public test set is not loaded until the winning
-validation configuration has been fixed.
-
-We also tried widening the base KNN search to uniform weighting at several k
-(not just the Part A k=11/k=21), but that enlarged the hyperparameter grid
-enough to raise the validation accuracy (0.7080 -> 0.7128) while *lowering*
-test accuracy (0.7036 -> 0.7008) -- a sign of validation-set overfitting from
-too large a search space relative to ~1500 validation rows. We keep the base
-KNN search restricted to the Part A configuration plus distance-weighting so
-the reported gain is attributable to the priors, not to a larger grid.
-"""
-
 from dataclasses import dataclass, replace
 
 import matplotlib.pyplot as plt
