@@ -269,7 +269,7 @@ def main():
     # Part (e):
     # best_lamb = search_lambda(num_question, best_k, best_lr, num_epoch,
     #                            train_matrix, zero_train_matrix, valid_data)
-    best_lamb = 0.001  # found by search_lambda: valid_acc=0.6840
+    best_lamb = 1.0  # found by search_lambda: valid_acc=0.6883
 
     # Part (e):
     final_model = AutoEncoder(num_question, best_k)
@@ -282,7 +282,6 @@ def main():
 
     print(f"Final valid acc (k*={best_k}, lr*={best_lr}, lambda*={best_lamb}): {final_valid_acc:.4f}")
     print(f"Final test acc  (k*={best_k}, lr*={best_lr}, lambda*={best_lamb}): {final_test_acc:.4f}")
-
     
     #####################################################################
     #                       END OF YOUR CODE                            #
