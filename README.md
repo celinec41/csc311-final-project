@@ -35,7 +35,7 @@ correctness priors (per-question and per-student average correctness) —
 | Item-based KNN ($k=21$) | 0.6916 | 0.6828 |
 | IRT ($\eta=0.001$, 150 iters) | 0.7079 | 0.7030 |
 | NN Autoencoder ($k=10$, lr$=0.03$, $\lambda=0.001$) | 0.6820 | 0.6760 |
-| Bagging ensemble (kNN + IRT + NN) | 0.6868 | 0.6867 |
+| Bagging ensemble (kNN + IRT + NN) | 0.6826 | 0.6802 |
 | **Part B: tuned hybrid (KNN + priors)** | **0.7115** | **0.7079** |
 
 Full derivations, tuning curves, and discussion are in [`report.pdf`](report.pdf).
