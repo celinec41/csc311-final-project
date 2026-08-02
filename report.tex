@@ -318,7 +318,7 @@ Final test accuracy (k*=10, lr*=0.03, 20 epochs, $\lambda=0$): \textbf{0.6856}
 
 Using $\lambda^* = 1.0$ (selected via validation accuracy, tested over $\lambda \in \{0.0, 0.001, 0.01, 0.1, 1.0\}$ with $k^*=10$ and $\text{lr}^*=0.03$ fixed), the final model achieves:
 \begin{itemize}
-    \item Validation accuracy: $.6773$
+    \item Validation accuracy: $0.6773$
     \item Test accuracy: $0.6808$
 \end{itemize}
 Compared to the unregularized model ($\lambda = 0$) with the same $k^*$ and $\text{lr}^*$, which achieved a test accuracy of $0.6856$, the regularized model performs slightly worse. We therefore conclude that adding the $L_2$ regularization penalty does not improve generalization performance in this setting, and may in fact slightly hurt it. This is likely because the autoencoder's hidden dimension $k^*=10$ is already very small relative to the number of questions, which acts as a strong implicit regularizer by limiting the model's capacity to overfit; an explicit weight penalty on top of this therefore offers no additional benefit and can instead constrain the model away from its unregularized optimum.
