@@ -219,7 +219,7 @@ Very small learning rates ($\eta=0.001$) with enough iterations gave the best va
 \end{figure}
 
 \subsubsection*{(c) Final accuracy}
-With the selected hyperparameters, the final validation accuracy was $\mathbf{70.8\%}$ and the final test accuracy was $\mathbf{70.3\%}$. The test accuracy is slightly lower than the $\eta=0.01$ setting we had used previously ($70.8\%$), even though the new hyperparameters were chosen for higher validation accuracy. This is expected: the validation and test sets are different samples, so a small ($<1\%$) hyperparameter-driven improvement on one does not guarantee an identical improvement on the other.
+With the selected hyperparameters, the final validation accuracy was $\mathbf{70.79\%}$ (matching the boxed entry in Table~\ref{tab:irt_tune}) and the final test accuracy was $\mathbf{70.28\%}$. The test accuracy is slightly lower than the $\eta=0.01$ setting we had used previously ($70.63\%$ validation, $70.79\%$ test), even though the new hyperparameters were chosen for higher validation accuracy. This is expected: the validation and test sets are different samples, so a small ($<1\%$) hyperparameter-driven improvement on one does not guarantee an identical improvement on the other.
 
 \subsubsection*{(d) Probability curves}
 Figure~\ref{fig:irt_prob} shows the probability of a correct response, $p(c_{ij}=1)$, as a function of student ability $\theta$, for three questions of varying difficulty.
@@ -342,48 +342,39 @@ The ensemble's accuracy sits between the strongest base model (IRT) and the two 
  
 \subsection*{1. Formal Description}
 
-\textbf{Motivation.} In Part A, both user-based and item-based KNN impute a student-question pair $(i,j)$ using only the $k$ training rows (or columns) nearest to row $i$ (or column $j$) under a NaN-aware Euclidean distance. When a student or question has very few observed entries, the neighbourhood used to compute this distance is small and the resulting distance estimates -- and hence the imputed probability -- are noisy: KNN has low bias but high variance in the sparse regions of $C$. A natural way to reduce this variance is to blend the KNN estimate with a much lower-variance, higher-bias estimate that ignores neighbour structure entirely and simply averages all training observations for that student or question. We formalize this blend below.
+\textbf{Motivation.} Part A's user- and item-based KNN impute a pair $(i,j)$ from only the $k$ nearest rows/columns under a NaN-aware Euclidean distance. When a student or question has few observations, this neighbourhood is small and the imputed probability is noisy: KNN is low-bias but high-variance in sparse regions of $C$. We reduce this variance by blending KNN with a much lower-variance, higher-bias estimate: the simple average of all training observations for that student or question.
 
-\textbf{Base predictors.} Let $C \in \{0,1,\mathrm{NaN}\}^{N \times M}$ be the training response matrix ($N=542$ students, $M=1774$ questions) and let $O$ denote the set of observed $(i,j)$ pairs. Let $\hat{c}^{\text{user}}_{ij}, \hat{c}^{\text{item}}_{ij} \in [0,1]$ be the probabilities produced by the Part A user-based ($k=11$) and item-based ($k=21$) KNN imputers, respectively (Section 4.1). Define two correctness priors directly from the training data:
+\textbf{Base predictors.} Let $C \in \{0,1,\mathrm{NaN}\}^{N \times M}$ be the training matrix ($N=542$ students, $M=1774$ questions), $O$ the observed pairs, and $\hat{c}^{\text{user}}_{ij}, \hat{c}^{\text{item}}_{ij} \in [0,1]$ the Part A user- ($k{=}11$) and item- ($k{=}21$) KNN probabilities. Define two correctness priors from the training data, each falling back to the global rate $\bar{c}$ if the row/column has no observations:
 \[
 \pi^{q}_j = \frac{\sum_{i : (i,j) \in O} c_{ij}}{|\{i : (i,j) \in O\}|}, \qquad
-\pi^{s}_i = \frac{\sum_{j : (i,j) \in O} c_{ij}}{|\{j : (i,j) \in O\}|},
+\pi^{s}_i = \frac{\sum_{j : (i,j) \in O} c_{ij}}{|\{j : (i,j) \in O\}|}.
 \]
-the empirical correctness rate of question $j$ and of student $i$ over the training set, each falling back to the global training correctness rate $\bar{c} = \frac{1}{|O|}\sum_{(i,j)\in O} c_{ij}$ if the corresponding row or column has no observations.
 
-\textbf{Hybrid model.} Given weights $\alpha, \beta, \gamma \in [0,1]$, define
+\textbf{Hybrid model.} Given weights $\alpha, \beta, \gamma \in [0,1]$ and threshold $\tau$:
 \[
 p^{\text{knn}}_{ij}(\alpha) = \alpha\, \hat{c}^{\text{user}}_{ij} + (1-\alpha)\, \hat{c}^{\text{item}}_{ij}, \qquad
 p^{\text{prior}}_{ij}(\beta) = \beta\, \pi^{q}_j + (1-\beta)\, \pi^{s}_i,
 \]
 \[
-p_{ij}(\alpha,\beta,\gamma) = \gamma\, p^{\text{knn}}_{ij}(\alpha) + (1-\gamma)\, p^{\text{prior}}_{ij}(\beta),
+p_{ij}(\alpha,\beta,\gamma) = \gamma\, p^{\text{knn}}_{ij}(\alpha) + (1-\gamma)\, p^{\text{prior}}_{ij}(\beta), \qquad
+\hat{c}_{ij} = \mathbb{1}[\,p_{ij} \geq \tau\,].
 \]
-and predict $\hat{c}_{ij} = \mathbb{1}[\,p_{ij}(\alpha,\beta,\gamma) \geq \tau\,]$ for a threshold $\tau \in [0,1]$. This is a strict generalization of Part A: setting $\gamma=1,\alpha=1$ recovers user-based KNN alone, and $\gamma=1,\alpha=0$ recovers item-based KNN alone.
+This strictly generalizes Part A: $\gamma{=}1,\alpha{=}1$ recovers user-based KNN alone, and $\gamma{=}1,\alpha{=}0$ recovers item-based KNN alone.
 
-\textbf{Hyperparameter selection.} The hyperparameters $(\alpha,\beta,\gamma,\tau)$, together with the choice of $k$ and weighting scheme (uniform or inverse-distance) for the two base KNN predictors, are selected by grid search to maximize accuracy on the validation set, as summarized in Algorithm~\ref{alg:tuning}. The test set is never used for selection.
+\textbf{Hyperparameter selection.} $(\alpha,\beta,\gamma,\tau)$ and the base KNN configurations ($k$, uniform/distance weighting) are chosen by grid search to maximize \emph{validation} accuracy (Algorithm~\ref{alg:tuning}); the test set is touched only once, at the end.
 
 \begin{algorithm}[H]
 \caption{Validation-selected hybrid tuning}
 \label{alg:tuning}
 \begin{algorithmic}[1]
-\STATE Fit every candidate user-/item-KNN configuration (Part A baseline and distance-weighted, $k \in \{5,\dots,50\}$) on the training matrix $C$; cache their predictions on the validation set.
-\STATE Compute $\pi^{q}_j$ and $\pi^{s}_i$ from $C$; index them onto the validation pairs.
-\STATE $\text{best\_acc} \leftarrow -\infty$
-\FOR{each pair of user/item KNN configurations}
-    \FOR{$\alpha, \gamma, \beta, \tau$ in their respective grids}
-        \STATE Compute $p_{ij}(\alpha,\beta,\gamma)$ and $\hat{c}_{ij}$ for all validation pairs
-        \STATE $\text{acc} \leftarrow$ validation accuracy of $\hat{c}$
-        \IF{$\text{acc} > \text{best\_acc}$}
-            \STATE $\text{best\_acc} \leftarrow \text{acc}$; store $(\text{configs}, \alpha,\beta,\gamma,\tau)$
-        \ENDIF
-    \ENDFOR
-\ENDFOR
-\STATE Refit the two selected KNN configurations, evaluate the stored hyperparameters once on the test set.
+\STATE Fit every candidate user-/item-KNN config (Part A baseline + distance-weighted, $k \in \{5,\dots,50\}$); cache validation predictions.
+\STATE Compute $\pi^{q}_j, \pi^{s}_i$ from $C$.
+\STATE For every combination of configs and $(\alpha,\beta,\gamma,\tau)$: compute $p_{ij}$, $\hat c_{ij}$, and validation accuracy; keep the best.
+\STATE Refit the selected configs, evaluate once on the test set.
 \end{algorithmic}
 \end{algorithm}
 
-\textbf{Why this should help.} The hybrid is a convex combination of a low-bias/high-variance predictor ($p^{\text{knn}}$) and a high-bias/low-variance predictor ($p^{\text{prior}}$). Whenever the two make partially independent errors, which we expect for sparse rows/columns, where KNN's neighbour-based estimate is unreliable but the prior's aggregate is not, the convex combination has strictly lower expected squared error than either endpoint for some interior $\gamma$, by the standard bias-variance decomposition of a weighted average. Because $\alpha,\beta,\gamma,\tau$ are chosen on a held-out validation set, this argument only predicts an improvement in expectation, not that our particular grid search finds the population-optimal weights; Section 3 tests this expectation directly, including which of the two priors actually drives the improvement.
+\textbf{Why this should help.} The hybrid convex-combines a low-bias/high-variance predictor ($p^{\text{knn}}$) with a high-bias/low-variance one ($p^{\text{prior}}$). Whenever the two make partially independent errors -- expected in sparse rows/columns, where KNN is unreliable but the priors' aggregates are not -- the combination has strictly lower expected squared error than either endpoint for some interior $\gamma$. Section 3 tests this directly, including which prior actually drives the improvement.
 
 \subsection*{2. Figure or Diagram}
 
@@ -434,11 +425,7 @@ Figure~\ref{fig:partb_schematic} illustrates the overall structure of the Part B
 
 \subsubsection*{Accuracy comparison}
 
-Table~\ref{tab:partb_results} reports validation and test accuracy for
-the Part A baselines and each stage of the Part B hybrid, all selected
-using validation accuracy only. The test set was not used for model
-selection. Figure~\ref{fig:partb_comparison} shows the same comparison
-visually.
+Table~\ref{tab:partb_results} reports validation/test accuracy for the Part A baselines and each stage of the hybrid, all selected using validation accuracy only (Figure~\ref{fig:partb_comparison} shows the same visually).
 
 \begin{table}[H]
     \centering
@@ -484,71 +471,17 @@ visually.
     \label{fig:partb_comparison}
 \end{figure}
 
-The final hybrid improves test accuracy by roughly $2.3$ percentage
-points over the stronger Part A baseline
-(user KNN, $68.47\% \to 70.79\%$), and by about $1.2$ points over a
-naive unweighted average of the two Part A models
-($69.63\% \to 70.79\%$), confirming that the gain is not simply from
-averaging two noisy predictors.
+The final hybrid improves test accuracy by roughly $2.3$ points over the stronger Part A baseline ($68.47\% \to 70.79\%$) and by $1.2$ points over a naive unweighted user/item average ($69.63\% \to 70.79\%$), so the gain is not simply from averaging two noisy predictors.
 
 \subsubsection*{Disentangling the source of the improvement}
 
-Our hypothesis was that KNN's accuracy is limited by the sparsity of the
-response matrix: any single student or question has very few observed
-entries, so the imputed probabilities are noisy. We expected two
-changes to help: (i) tuning and combining the user- and item-based KNN
-predictors, and (ii) backing off sparse predictions toward simple,
-low-variance correctness priors (per-question and per-student averages).
-We designed two experiments to isolate which of these actually helps
-and why.
+We hypothesized that KNN is limited by sparsity: individual students/questions have few observations, so imputed probabilities are noisy. Two changes were expected to help: (i) combining user- and item-based KNN, and (ii) backing off toward low-variance correctness priors. Two experiments isolate which actually helps.
 
-\textbf{Experiment 1 -- which prior helps?}
+\textbf{Experiment 1 -- which prior helps?} Adding only the question prior raises validation accuracy from $70.41\%$ to $70.49\%$ ($69.63\%\to70.17\%$ test); the student prior alone raises it further to $70.90\%$ ($70.03\%$ test). Combining both equally ($\beta=0.50$) beats either alone, reaching $71.15\%$ validation / $70.79\%$ test. This matches the intuition that per-student and per-question correctness rates carry independent signal beyond what KNN captures, so mixing both priors reduces variance more than either alone.
 
-We compared adding only the question-difficulty prior, only the
-student-ability prior, and both, to the 50--50 hybrid
-(Table~\ref{tab:partb_results}). Both priors individually improve on
-the plain hybrid: the question prior alone raises validation accuracy
-from $70.41\%$ to $70.49\%$
-($69.63\% \to 70.17\%$ test), and the student prior alone raises
-validation accuracy further to $70.90\%$ ($70.03\%$ test). Combining
-the two priors in equal proportion ($\beta=0.50$) outperforms either
-alone, reaching $71.15\%$ validation and $70.79\%$ test accuracy, so
-the selected configuration blends both priors rather than relying on a
-single one.
+\textbf{Experiment 2 -- priors, or just a larger search?} The independently best-tuned user/item KNN models score no higher than the Part A baselines ($68.97\%/68.47\%$ and $69.16\%/68.28\%$), while combining them reaches $70.41\%$ validation and adding both priors reaches $71.15\%$. So the improvement is attributable to combining the priors and the two KNN sources, not to a larger KNN hyperparameter search.
 
-This matches the underlying intuition that per-student and
-per-question correctness rates each carry some independent signal
-beyond what the KNN imputers capture, and mixing the two priors together
-reduces variance further than either alone.
-
-\textbf{Experiment 2 -- is the gain from the priors, or from a larger
-search?}
-
-We compared the independently tuned user- and item-based KNN models
-with the hybrid models. The best tuned user KNN still achieves
-$68.97\%$ validation accuracy and $68.47\%$ test accuracy, while the
-best tuned item KNN still achieves $69.16\%$ validation accuracy and
-$68.28\%$ test accuracy. These values are the same as the Part A
-baselines.
-
-In contrast, combining the two KNN predictors increases validation
-accuracy to $70.41\%$, and adding both priors increases it further to
-$71.15\%$. On the test set, the strongest individual Part A result is
-$68.47\%$, the 50--50 hybrid reaches $69.63\%$, and the final hybrid
-reaches $70.79\%$.
-
-This suggests that the improvement is mainly attributable to combining
-the priors and the two KNN prediction sources, rather than simply
-searching over a larger set of KNN hyperparameters.
-
-Figure~\ref{fig:partb_tuning} shows the validation sensitivity of the
-final hybrid to $\beta$ (question- vs. student-prior weight) and to
-$(\gamma,\tau)$ (KNN-vs-prior weight and classification threshold) at
-the selected configuration. The selected
-$(\gamma,\tau)=(0.70,0.55)$ lies at the edge of the searched grid.
-Several nearby configurations achieve similar validation accuracies,
-although the best result still occurs at the boundary of the search
-range.
+Figure~\ref{fig:partb_tuning} shows validation sensitivity to $\beta$ and to $(\gamma,\tau)$ at the selected configuration ($\alpha=0.50$, $\beta=0.50$, $\gamma=0.70$, $\tau=0.55$, $71.15\%$ validation). Expanding all four weights, the final probability places $35\%$/$35\%$ on user/item KNN and $15\%$/$15\%$ on the question/student priors. The selected $(\gamma,\tau)$ lies at the edge of the searched grid, suggesting a wider search could help further (see Limitations).
 
 \begin{figure}[H]
     \centering
@@ -560,128 +493,13 @@ range.
     \label{fig:partb_tuning}
 \end{figure}
 
-The left panel shows that validation accuracy is highest at
-$\beta=0.50$, meaning that the selected model gives equal weight to the
-question prior and the student prior. Since
-\[
-p^{\text{prior}}_{ij}(\beta)
-=
-\beta\pi_j^q+(1-\beta)\pi_i^s,
-\]
-the selected value gives
-\[
-p^{\text{prior}}_{ij}
-=
-0.50\pi_j^q+0.50\pi_i^s.
-\]
-
-With $\alpha=0.50$ and $\beta=0.50$ fixed, the right panel shows that
-the best searched combination is
-\[
-\gamma=0.70,
-\qquad
-\tau=0.55,
-\]
-which achieves $71.15\%$ validation accuracy.
-
-The value $\alpha=0.50$ means that the KNN component gives equal weight
-to the user-based and item-based KNN predictions:
-\[
-p^{\text{knn}}_{ij}
-=
-0.50\hat{c}^{\text{user}}_{ij}
-+
-0.50\hat{c}^{\text{item}}_{ij}.
-\]
-
-The value $\gamma=0.70$ means that the final probability uses $70\%$
-weight from the KNN component and $30\%$ weight from the prior
-component:
-\[
-p_{ij}
-=
-0.70p^{\text{knn}}_{ij}
-+
-0.30p^{\text{prior}}_{ij}.
-\]
-
-Therefore, after expanding all weights, the final probability gives
-$35\%$ weight to user-based KNN, $35\%$ weight to item-based KNN,
-$15\%$ weight to the question prior, and $15\%$ weight to the student
-prior.
-
-The threshold $\tau=0.55$ means that the model predicts a correct
-response when
-\[
-p_{ij}\geq 0.55,
-\]
-and predicts an incorrect response otherwise. This threshold was
-selected because it gave the highest validation accuracy among the
-tested values.
-
-Overall, the results support our hypothesis. Combining user- and
-item-based KNN captures complementary similarity information, while the
-student and question priors provide lower-variance information that
-helps stabilize predictions in sparse regions of the response matrix.
-The fact that the best $(\gamma,\tau)$ combination lies at the edge of
-the searched grid suggests that a wider search over $\gamma$ and
-$\tau$ could be explored in future work.
-
-
 \subsection*{4. Limitations}
 
-\textbf{Sparsity is only partially addressed.}
-The priors help because both students and questions have more observed
-entries on average than a single KNN neighbourhood does. However, each
-prior is still only a single scalar for each student or question. For
-students or questions with very few responses, the prior may be
-unreliable and may fall back to the global average, which provides
-little personalization. The approach would also perform poorly for a
-true cold-start student or question with zero training observations,
-since both the KNN predictors and the priors would contain very little
-useful information.
+\textbf{Sparsity is only partially addressed.} Each prior is still just one scalar per student/question, and falls back to the global average when observations are scarce. A true cold-start student or question with zero training observations would leave both the KNN predictors and the priors with little useful information.
 
-\textbf{Heuristic rather than principled combination.}
-Unlike IRT, which derives $p(c_{ij}=1)$ from an explicit probabilistic
-model with interpretable student-ability and question-difficulty
-parameters, our hybrid combines KNN outputs and priors using
-validation-selected linear weights $(\alpha,\beta,\gamma)$ and a
-classification threshold $\tau$. The method does not provide a
-principled rule for how much weight each component should receive in
-general. The selected weights are dataset-dependent and would likely
-need to be re-tuned for a different response matrix or a different
-student-to-question ratio.
+\textbf{Heuristic rather than principled combination.} Unlike IRT, which derives $p(c_{ij}=1)$ from an explicit probabilistic model, our hybrid combines KNN outputs and priors via validation-selected linear weights $(\alpha,\beta,\gamma,\tau)$ with no principled rule for how much weight each component should get. These weights are dataset-dependent and would likely need re-tuning for a different response matrix or student-to-question ratio.
 
-\textbf{Sensitivity to hyperparameter selection and to the computing
-environment.}
-The validation set is relatively small, so it may not reliably
-distinguish between several configurations with very similar
-accuracies. We also observed, while re-running our own code, that the
-selected $(\alpha,\beta,\gamma,\tau)$ combination is not perfectly
-stable across re-runs on different machines. Small floating-point
-differences in the nearest-neighbour distance computation across
-library or hardware versions may change which of several near-tied
-grid points is selected as the arg-max. This means that the reported
-test accuracy is only a point estimate, and a different validation
-split or computing environment could select a slightly different
-configuration. A more robust extension would use cross-validation, a
-larger held-out set, or an explicit tie-breaking and stability check
-for the final hyperparameter selection.
+\textbf{Sensitivity to hyperparameter selection.} The validation set ($\sim$1500 rows) may not reliably distinguish near-tied configurations, and the selected $(\gamma,\tau)$ lies at the edge of the searched grid rather than an interior maximum -- a wider, finer search might do better. We also observed, while re-running our own code on different machines, that the selected $(\alpha,\beta,\gamma,\tau)$ is not perfectly stable: small floating-point differences in the nearest-neighbour distance computation across library versions can change which near-tied grid point is picked. The reported test accuracy is therefore a point estimate; a different validation split, search range, or computing environment could select a slightly different configuration. Cross-validation or a larger held-out set would make selection more robust.
 
-\textbf{Unused structure.}
-We did not use \texttt{question\_meta.csv} or
-\texttt{student\_meta.csv}. A natural extension would be to use a
-hierarchical prior. For example, if a question has very few observed
-responses, its difficulty estimate could be backed off to the average
-correctness rate of questions from the same subject rather than directly
-to the global average. Student metadata could also be incorporated to
-improve predictions for students with limited response histories.
-
-\textbf{Under-explored search range.}
-The selected $(\gamma,\tau)$ lies at the edge of the searched range,
-with validation accuracy still increasing toward that boundary rather
-than reaching a clear interior maximum. This suggests that the current
-search range may not contain the true best configuration. A follow-up
-search over a wider range of $\gamma$ and $\tau$, possibly using finer
-steps, could determine whether further improvement is possible.
+\textbf{Unused structure.} We did not use \texttt{question\_meta.csv} or \texttt{student\_meta.csv}. A hierarchical prior -- e.g. backing off a sparse question's difficulty to its subject's average rather than the global average -- is a natural extension, as is incorporating student metadata for students with limited response histories.
 \end{document}
