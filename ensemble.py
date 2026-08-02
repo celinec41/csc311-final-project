@@ -12,7 +12,7 @@ from item_response import irt, sigmoid as irt_sigmoid
 from neural_network import AutoEncoder, train as nn_train
 
 BEST_KNN_K = 11
-BEST_IRT_LR = 0.01
+BEST_IRT_LR = 0.001
 BEST_IRT_ITERATIONS = 150
 NN_K = 10
 NN_LR = 0.03
