@@ -138,7 +138,8 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
             target[nan_mask] = output[nan_mask]
 
             loss = torch.sum((output - target) ** 2.0)
-            reg_loss = loss + (lamb / 2.0) * model.get_weight_norm()
+            #     sum_{v in S} ||v - f(v)||^2 + (lamb/2) * (||W1||_F^2 + ||W2||_F^2),
+            reg_loss = loss + (lamb / 2.0) * model.get_weight_norm() / num_student
             reg_loss.backward()
 
             train_loss += loss.item()
